@@ -1,0 +1,24 @@
+{
+  "name": "chattingapp",
+  "version": "1.0.0",
+  "description": "A complete chat and social platform with a FastAPI backend and a React + Vite frontend.",
+  "main": "index.js",
+  "scripts": {
+    "backend:install": "cd backend && set SSL_CERT_FILE=& set REQUESTS_CA_BUNDLE=& set CURL_CA_BUNDLE=& venv\\Scripts\\python.exe -m pip install -r requirements.txt",
+    "backend": "cd backend && set SSL_CERT_FILE=& set REQUESTS_CA_BUNDLE=& set CURL_CA_BUNDLE=& venv\\Scripts\\python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "frontend": "cd frontend && npm run dev",
+    "frontend:wait": "wait-on http-get://localhost:8000/health && npm run frontend",
+    "backend:migrate": "cd backend && set SSL_CERT_FILE=& set REQUESTS_CA_BUNDLE=& set CURL_CA_BUNDLE=& venv\\Scripts\\python.exe -m alembic upgrade head",
+    "backend:migrate:revision": "cd backend && set SSL_CERT_FILE=& set REQUESTS_CA_BUNDLE=& set CURL_CA_BUNDLE=& venv\\Scripts\\python.exe -m alembic revision --autogenerate -m",
+    "backend:migrate:history": "cd backend && set SSL_CERT_FILE=& set REQUESTS_CA_BUNDLE=& set CURL_CA_BUNDLE=& venv\\Scripts\\python.exe -m alembic history --verbose",
+    "dev": "concurrently --restart-tries 10 --restart-after 1000 -n BACKEND,FRONTEND -c blue,green \"npm run backend\" \"npm run frontend:wait\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "wait-on": "^9.0.10"
+  }
+}

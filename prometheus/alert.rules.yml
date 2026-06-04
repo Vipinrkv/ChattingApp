@@ -1,0 +1,56 @@
+groups:
+  - name: chattingapp
+    rules:
+      - alert: HighErrorRate
+        expr: rate(chattingapp_http_requests_total{http_status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "HTTP 5xx errors are above 5% for 5 minutes."
+
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, sum(rate(chattingapp_http_request_latency_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained P95 latency above 1 second"
+          description: "P95 HTTP latency has been above 1 second for 5 minutes."
+
+      - alert: DatabaseQueryErrors
+        expr: rate(chattingapp_db_query_errors_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High database query error rate"
+          description: "Database query errors are above 1% for 5 minutes."
+
+      - alert: FrequentWebSocketDisconnects
+        expr: increase(chattingapp_websocket_disconnects_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent WebSocket disconnects"
+          description: "More than 10 WebSocket disconnects were observed in the last 5 minutes."
+
+      - alert: BackendDown
+        expr: up{job="chattingapp-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend is down"
+          description: "Prometheus cannot scrape backend metrics for over 1 minute."
+
+      - alert: HighWebSocketMemoryUsage
+        expr: chattingapp_websocket_memory_usage_bytes > 50000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket memory usage"
+          description: "WebSocket memory usage has exceeded 50 MB for 5 minutes."

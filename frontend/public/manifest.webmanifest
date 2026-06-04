@@ -1,0 +1,40 @@
+{
+  "name": "ChattingApp",
+  "short_name": "ChattingApp",
+  "description": "Realtime social chat with offline-ready community, feed, and messaging surfaces.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#071027",
+  "theme_color": "#3b82f6",
+  "categories": ["social", "communication"],
+  "icons": [
+    {
+      "src": "/favicon.ico.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chats",
+      "short_name": "Chats",
+      "url": "/chat",
+      "description": "Open direct messages"
+    },
+    {
+      "name": "Groups",
+      "short_name": "Groups",
+      "url": "/groups",
+      "description": "Open group communities"
+    },
+    {
+      "name": "Feed",
+      "short_name": "Feed",
+      "url": "/feed",
+      "description": "Open the social feed"
+    }
+  ]
+}

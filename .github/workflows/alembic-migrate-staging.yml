@@ -1,0 +1,52 @@
+name: Alembic Migrate Staging
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  migrate-staging:
+    name: Run Alembic migrations against staging
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_DIR: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run backup and migrate script
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          chmod +x ${{ env.BACKEND_DIR }}/tools/backup_and_migrate.sh
+          ${{ env.BACKEND_DIR }}/tools/backup_and_migrate.sh
+
+      - name: Post-migrate smoke test
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          chmod +x ${{ env.BACKEND_DIR }}/tools/post_migrate_smoke_test.sh
+          ${{ env.BACKEND_DIR }}/tools/post_migrate_smoke_test.sh
+
+      - name: Run smoke tests (optional)
+        if: always()
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          if [ -f pytest.ini ] || [ -d tests ]; then
+            python -m pip install pytest
+            pytest -q || true
+          fi

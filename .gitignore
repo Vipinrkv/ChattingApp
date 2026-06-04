@@ -1,0 +1,100 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Backend environment files
+backend/.env
+backend/.env.*
+
+# Secrets (firebase key/credentials)
+backend/firebase_key.json
+backend/app/core/firebase_key.json
+backend/firebase-credentials.json
+backend/firebase-credentials.*.json
+backend/firebase-credentials.json
+backend/firebase_key.*.json
+backend/firebase-credentials.json
+
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.pydevproject
+
+# Node & Frontend
+node_modules/
+npm-debug.log*
+yarn-error.log*
+dist/
+build/
+frontend/.env
+frontend/.env.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+migrations/versions/*.py
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
+
+# OS
+Thumbs.db
+.DS_Store
+*.pem
+*.key
+*.crt
+
+# Temp & Cache
+.cache/
+*.tmp
+temp/
+uploads/
+backend/uploads/
+backend/uploads/*
+

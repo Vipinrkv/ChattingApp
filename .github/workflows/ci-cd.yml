@@ -1,0 +1,180 @@
+name: CI / CD
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deployment action to run'
+        required: true
+        type: choice
+        options:
+          - production
+          - rollback
+        default: production
+      previous_backend_image:
+        description: 'Previous known-good backend image for rollback'
+        required: false
+        type: string
+      previous_frontend_image:
+        description: 'Previous known-good frontend image for rollback'
+        required: false
+        type: string
+
+jobs:
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+      - name: Run frontend lint
+        run: |
+          cd frontend
+          npm run lint
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run backend lint
+        run: |
+          cd backend
+          python -m pip install flake8
+          python -m flake8 app
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chattingapp
+          POSTGRES_PASSWORD: strongpassword
+          POSTGRES_DB: chat_platform
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run backend tests
+        run: |
+          cd backend
+          pytest --maxfail=1 --disable-warnings -q
+      - name: LAN/WebSocket smoke coverage contract guard
+        run: |
+          cd backend
+          python tools/lan_websocket_smoke.py --ci-guard
+
+  deploy_staging:
+    name: Deploy staging images
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+      - name: Build and push backend image for staging
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-backend:staging -f backend/Dockerfile backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-backend:staging
+      - name: Build and push frontend image for staging
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-frontend:staging -f frontend/Dockerfile frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-frontend:staging
+
+  deploy_production:
+    name: Deploy production images
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'production')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+      - name: Build and push backend image for production
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-backend:latest -f backend/Dockerfile backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-backend:latest
+      - name: Build and push frontend image for production
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-frontend:latest -f frontend/Dockerfile frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/chattingapp-frontend:latest
+
+  rollback:
+    name: Production rollback
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'rollback'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate rollback inputs
+        run: |
+          test -n "${{ github.event.inputs.previous_backend_image }}"
+          test -n "${{ github.event.inputs.previous_frontend_image }}"
+      - name: Create rollback manifest
+        run: |
+          {
+            echo "BACKEND_IMAGE=${{ github.event.inputs.previous_backend_image }}"
+            echo "FRONTEND_IMAGE=${{ github.event.inputs.previous_frontend_image }}"
+            echo "ROLLBACK_REQUESTED_BY=${{ github.actor }}"
+            echo "ROLLBACK_RUN_ID=${{ github.run_id }}"
+          } > rollback-manifest.txt
+          cat rollback-manifest.txt
+      - name: Upload rollback manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-rollback-manifest
+          path: rollback-manifest.txt
+      - name: Rollback operator instructions
+        run: |
+          echo "Use rollback-manifest.txt with your production deploy provider."
+          echo "Follow docs/PRODUCTION_ROLLBACK_RUNBOOK.md for verification and stop conditions."

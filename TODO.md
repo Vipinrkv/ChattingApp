@@ -1,0 +1,4 @@
+- [ ] Review .gitignore files (root + backend + frontend) and identify missing/incorrect ignore patterns
+- [ ] Update only root .gitignore: add backend uploads, generic backend env patterns, and align firebase secret ignore filenames
+- [ ] Run git sanity checks (git status --ignored --porcelain / git check-ignore) to verify behavior
+- [ ] If needed, adjust backend/.gitignore and frontend/.gitignore based on check-ignore results
