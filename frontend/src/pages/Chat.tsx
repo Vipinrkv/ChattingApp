@@ -818,7 +818,7 @@ function Chat() {
     const isConsecutive = item.isConsecutive;
     const isOutgoing = message.sender_id !== selectedPeer?.id;
     const replyPreview = getReplyPreview(message);
-    const reactions = Object.entries(message.reactions ?? {}).filter(([, users]) => users.length > 0);
+    const reactions = Object.entries(message.reactions ?? {}).filter(([, users]) => (users as any).length > 0) as [string, string[]][];
 
     const messageActionItems: DropdownItem[] = [
       {
