@@ -35,20 +35,17 @@ class DeviceSync(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
-    device_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    device_id: Mapped[str] = mapped_column(String(255), nullable=False)
     message_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("messages.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     sync_status: Mapped[SyncStatus] = mapped_column(
         SQLEnum(SyncStatus, name="syncstatus", values_callable=lambda enum: [item.value for item in enum]),
         default=SyncStatus.PENDING,
         nullable=False,
-        index=True,
     )
     last_sync_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

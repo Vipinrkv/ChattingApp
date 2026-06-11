@@ -25,14 +25,14 @@ class MFASetup(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False)
     method = Column(SQLEnum(MFAMethod), nullable=False)
     secret = Column(String, nullable=True)  # Encrypted TOTP secret
     phone_number = Column(String, nullable=True)  # For SMS
     is_verified = Column(Boolean, default=False, index=True)
     is_active = Column(Boolean, default=True, index=True)
     backup_codes = Column(String, nullable=True)  # JSON of encrypted backup codes
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     verified_at = Column(DateTime, nullable=True)
     last_used_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -36,25 +36,21 @@ class ScheduledMessage(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     receiver_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     content: Mapped[str] = mapped_column(String(4096), nullable=False)
     scheduled_for: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        index=True,
     )
     status: Mapped[ScheduledMessageStatus] = mapped_column(
         SQLEnum(ScheduledMessageStatus, name="messagestatus", values_callable=lambda enum: [item.value for item in enum]),
         default=ScheduledMessageStatus.SCHEDULED,
         nullable=False,
-        index=True,
     )
     media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(80), nullable=True)

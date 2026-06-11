@@ -21,6 +21,7 @@ from app.schemas.group_schema import (
     GroupResponse,
     GroupSettingsRequest,
     GroupTemplateResponse,
+    GroupMemberRoleUpdateRequest,
 )
 from app.services.group_service import (
     GroupError,
@@ -40,6 +41,7 @@ from app.services.group_service import (
     send_group_message,
     serialize_group_message,
     update_group_settings,
+    assign_group_member_role,
 )
 
 router = APIRouter(
@@ -260,3 +262,23 @@ async def list_group_messages(
         return await get_group_messages(session, current_user_id, group_id, limit)
     except GroupError as exc:
         raise _group_forbidden(exc, code="group_messages_forbidden") from exc
+
+
+@router.patch("/{group_id}/members/{user_id}/role", response_model=GroupMemberResponse)
+async def update_member_role(
+    group_id: uuid.UUID,
+    user_id: uuid.UUID,
+    payload: GroupMemberRoleUpdateRequest,
+    current_user: User = Depends(get_current_user_dep),
+    session: AsyncSession = Depends(get_db_session),
+) -> GroupMemberResponse:
+    try:
+        return await assign_group_member_role(
+            session,
+            current_user.id,
+            group_id,
+            user_id,
+            payload.role,
+        )
+    except GroupError as exc:
+        raise _group_bad_request(exc, code="group_member_role_invalid") from exc

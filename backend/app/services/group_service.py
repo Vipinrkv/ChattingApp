@@ -705,3 +705,55 @@ async def get_group_analytics(
         "engagement_rate": round(message_count / max(member_count, 1), 2),
         "onboarding_completion_estimate": round(min((onboarding_steps / 2) * 100, 100), 2),
     }
+
+
+async def assign_group_member_role(
+    session: AsyncSession,
+    requesting_user_id: uuid.UUID,
+    group_id: uuid.UUID,
+    target_user_id: uuid.UUID,
+    new_role: str,
+) -> GroupMember:
+    group = await _get_group(session, group_id)
+    requester_member = await _get_active_member(session, group_id, requesting_user_id)
+    if not requester_member or requester_member.role not in {"admin", "owner"}:
+        raise GroupError("Only group admins or owners can assign roles")
+
+    target_member = await _get_active_member(session, group_id, target_user_id)
+    if not target_member:
+        raise GroupError("Target user is not an active member of the group")
+
+    if target_member.role == "owner" and requester_member.role != "owner":
+        raise GroupError("Cannot modify the role of the group owner")
+
+    if new_role not in {"owner", "admin", "moderator", "member"}:
+         raise GroupError("Invalid role specified")
+
+    target_member.role = new_role
+    await session.commit()
+    await session.refresh(target_member)
+    return target_member
+
+
+async def approve_group_verification(
+    session: AsyncSession,
+    group_id: uuid.UUID,
+) -> Group:
+    group = await _get_group(session, group_id)
+    group.is_verified = True
+    group.verification_status = "approved"
+    await session.commit()
+    await session.refresh(group)
+    return group
+
+
+async def reject_group_verification(
+    session: AsyncSession,
+    group_id: uuid.UUID,
+) -> Group:
+    group = await _get_group(session, group_id)
+    group.is_verified = False
+    group.verification_status = "rejected"
+    await session.commit()
+    await session.refresh(group)
+    return group

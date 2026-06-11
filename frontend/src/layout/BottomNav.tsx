@@ -6,6 +6,7 @@ const items = [
   { label: 'Chats', path: '/chat', icon: 'M' },
   { label: 'Groups', path: '/groups', icon: 'G' },
   { label: 'Profile', path: '/profile', icon: 'P' },
+  { label: 'Settings', path: '/settings', icon: 'S' },
 ];
 
 export default function BottomNav() {

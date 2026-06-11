@@ -26,20 +26,18 @@ class VoiceTranscription(Base):
         UUID(as_uuid=True),
         ForeignKey("messages.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     audio_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     transcribed_text: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     source_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
-    is_processed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_processed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     processing_error: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        index=True,
     )
     processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

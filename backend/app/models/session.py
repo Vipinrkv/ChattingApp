@@ -34,7 +34,7 @@ class UserSession(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False)
     
     # Device information
     device_id = Column(String, nullable=False, index=True)  # Unique device fingerprint
@@ -58,13 +58,13 @@ class UserSession(Base):
     access_token_hash = Column(String, nullable=True)
     
     # Session management
-    status = Column(SQLEnum(SessionStatus), default=SessionStatus.ACTIVE, index=True)
+    status = Column(SQLEnum(SessionStatus), default=SessionStatus.ACTIVE)
     is_trusted = Column(Boolean, default=False)  # User marked as trusted
     mfa_verified = Column(Boolean, default=False)  # MFA passed for this session
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    last_activity_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_activity_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False, index=True)
     revoked_at = Column(DateTime, nullable=True)
     revoke_reason = Column(String, nullable=True)
@@ -82,8 +82,8 @@ class UserDevice(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    device_id = Column(String, nullable=False, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False)
+    device_id = Column(String, nullable=False, unique=True)
     device_name = Column(String, nullable=True)
     device_type = Column(SQLEnum(DeviceType), default=DeviceType.WEB)
     
@@ -91,7 +91,7 @@ class UserDevice(Base):
     fingerprint = Column(String, nullable=True)
     
     # Trust status
-    is_trusted = Column(Boolean, default=False, index=True)
+    is_trusted = Column(Boolean, default=False)
     trust_token = Column(String, nullable=True)  # Token for automatic trust
     
     # Last seen

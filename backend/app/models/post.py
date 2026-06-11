@@ -25,6 +25,7 @@ class Post(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
     visibility = Column(SQLEnum(PostVisibility), default=PostVisibility.PUBLIC)
+    quoted_post_id = Column(UUID(as_uuid=True), ForeignKey("posts.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(
         DateTime,
@@ -34,3 +35,4 @@ class Post(Base):
 
     # Relationships
     user = relationship("User", back_populates="posts")
+    quoted_post = relationship("Post", remote_side=[id], foreign_keys=[quoted_post_id])

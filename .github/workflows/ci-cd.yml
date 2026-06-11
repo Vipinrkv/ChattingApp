@@ -60,6 +60,9 @@ jobs:
           cd backend
           python -m pip install flake8
           python -m flake8 app
+      - name: Run markdown link checker
+        run: |
+          python backend/tools/check_markdown_links.py
 
   test:
     name: Run tests
@@ -96,6 +99,19 @@ jobs:
         run: |
           cd backend
           python tools/lan_websocket_smoke.py --ci-guard
+      - name: Start FastAPI server for smoke test
+        run: |
+          cd backend
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > fastapi.log 2>&1 &
+          sleep 3
+      - name: Run deployment smoke test
+        run: |
+          export SMOKE_TEST_HOST="http://127.0.0.1:8000"
+          python backend/tools/deployment_smoke_test.py
+      - name: Print FastAPI logs on failure
+        if: failure()
+        run: |
+          cat backend/fastapi.log || true
 
   deploy_staging:
     name: Deploy staging images

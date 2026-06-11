@@ -100,6 +100,15 @@ interface GroupAnalyticsResponse {
   onboarding_completion_estimate: number;
 }
 
+interface GroupMemberResponse {
+  user_id: string;
+  group_id: string;
+  role: string;
+  status: string;
+  alias?: string | null;
+  joined_at: string;
+}
+
 function Groups() {
   const { user } = useAuth();
   const [groups, setGroups] = useState<GroupListResponse[]>([]);
@@ -121,6 +130,8 @@ function Groups() {
   const [groupMessages, setGroupMessages] = useState<GroupMessageResponse[]>([]);
   const [events, setEvents] = useState<GroupEventResponse[]>([]);
   const [analytics, setAnalytics] = useState<GroupAnalyticsResponse | null>(null);
+  const [groupMembers, setGroupMembers] = useState<GroupMemberResponse[]>([]);
+  const [currentUserProfile, setCurrentUserProfile] = useState<{ id: string } | null>(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageDraft, setMessageDraft] = useState('');
   const [inviteUserId, setInviteUserId] = useState('');
@@ -139,6 +150,16 @@ function Groups() {
   );
   const myGroups = useMemo(() => groups.filter((group) => group.is_member), [groups]);
   const discoverGroups = useMemo(() => groups.filter((group) => !group.is_member), [groups]);
+
+  const currentUserMember = useMemo(() => {
+    if (!currentUserProfile) return null;
+    return groupMembers.find((m) => m.user_id === currentUserProfile.id) ?? null;
+  }, [groupMembers, currentUserProfile]);
+
+  const isCurrentGroupAdmin = useMemo(() => {
+    return currentUserMember?.role === 'admin' || currentUserMember?.role === 'owner';
+  }, [currentUserMember]);
+
   const filteredDiscoverGroups = useMemo(() => {
     const query = directoryQuery.trim().toLowerCase();
     if (!query) return discoverGroups;
@@ -157,6 +178,45 @@ function Groups() {
   const listContainerRef = useRef<HTMLDivElement | null>(null);
   const [groupListHeight, setGroupListHeight] = useState(420);
   const renderCount = useRenderCount('GroupThread');
+
+  const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('chattingapp.completedOnboardingSteps') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const [activeGroupTab, setActiveGroupTab] = useState<'chat' | 'members' | 'events' | 'admin'>('chat');
+  const groupVirtualListRef = useRef<any>(null);
+
+  const getHashColor = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash % 360);
+    return `hsl(${h}, 70%, 65%)`;
+  };
+
+  const activePinnedMessage = useMemo(() => {
+    return groupMessages.find((m) => m.content.toLowerCase().includes('[pinned]')) || groupMessages[0] || null;
+  }, [groupMessages]);
+
+  useEffect(() => {
+    localStorage.setItem('chattingapp.completedOnboardingSteps', JSON.stringify(completedSteps));
+  }, [completedSteps]);
+
+  useEffect(() => {
+    setActiveGroupTab('chat');
+  }, [selectedGroupId]);
+
+  const toggleOnboardingStep = (stepId: string) => {
+    setCompletedSteps((prev) => ({
+      ...prev,
+      [stepId]: !prev[stepId]
+    }));
+  };
 
   useLayoutEffect(() => {
     const element = listContainerRef.current;
@@ -199,10 +259,38 @@ function Groups() {
       .filter(Boolean)
       .slice(0, 8);
 
-  const estimateGroupMessageHeight = (message: GroupMessageResponse) => {
+  const renderableGroupMessages = useMemo(() => {
+    const items: { type: 'message'; data: GroupMessageResponse; isConsecutive: boolean }[] = [];
+    let prevMsg: GroupMessageResponse | undefined = undefined;
+
+    groupMessages.forEach((msg) => {
+      const msgDate = new Date(msg.timestamp);
+      const prevDate = prevMsg ? new Date(prevMsg.timestamp) : null;
+
+      const consecutive = prevMsg && prevMsg.sender_id === msg.sender_id &&
+        (msgDate.getTime() - prevDate!.getTime() < 5 * 60 * 1000);
+
+      items.push({
+        type: 'message',
+        data: msg,
+        isConsecutive: !!consecutive
+      });
+
+      prevMsg = msg;
+    });
+
+    return items;
+  }, [groupMessages]);
+
+  const estimateGroupMessageHeight = (item: any) => {
+    const message = item.data;
     const contentLength = displayMessageContent(message.content).length;
     const lines = Math.ceil(contentLength / 45);
-    return Math.max(96, 90 + lines * 18);
+    let height = Math.max(96, 90 + lines * 18);
+    if (item.isConsecutive) {
+      height -= 36; // consecutive items have no headers, so they are shorter
+    }
+    return Math.max(52, height);
   };
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -291,10 +379,32 @@ function Groups() {
     }
   };
 
+  const loadGroupMembers = async (groupId: string) => {
+    try {
+      setGroupMembers((await apiGet(`/api/v1/groups/${groupId}/members`)) as GroupMemberResponse[]);
+    } catch {
+      setGroupMembers([]);
+    }
+  };
+
+  const handleUpdateMemberRole = async (targetUserId: string, newRole: string) => {
+    if (!selectedGroupId) return;
+    setActionError(null);
+    try {
+      await runAction(apiPatch(`/api/v1/groups/${selectedGroupId}/members/${targetUserId}/role`, { role: newRole }));
+      void loadGroupMembers(selectedGroupId);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not change member role');
+    }
+  };
+
   useEffect(() => {
     if (!canFetch) return;
     void loadGroups();
     void loadTemplates();
+    apiGet('/api/v1/users/me')
+      .then((data) => setCurrentUserProfile(data as { id: string }))
+      .catch(() => {});
   }, [canFetch]);
 
   useEffect(() => {
@@ -302,11 +412,13 @@ function Groups() {
       setGroupMessages([]);
       setEvents([]);
       setAnalytics(null);
+      setGroupMembers([]);
       return;
     }
     void loadGroupMessages(selectedGroupId);
     void loadGroupEvents(selectedGroupId);
     void loadGroupAnalytics(selectedGroupId);
+    void loadGroupMembers(selectedGroupId);
   }, [selectedGroupId, canFetch, selectedGroup?.is_member]);
 
   useEffect(() => {
@@ -584,121 +696,308 @@ function Groups() {
                     error={wsError}
                     label="Group chat"
                   />
-                  <div className="advanced-group-dashboard">
-                    <div className="metric-strip">
-                      <span><strong>{selectedGroup.member_count}</strong> members</span>
-                      <span><strong>{selectedGroup.message_count}</strong> messages</span>
-                      <span><strong>{selectedGroup.event_count}</strong> events</span>
-                      <span><strong>{analytics?.growth_percent ?? 0}%</strong> growth</span>
-                    </div>
-                    {selectedGroup.welcome_message ? <p className="privacy-explainer">{selectedGroup.welcome_message}</p> : null}
-                    {selectedGroup.onboarding_steps?.length ? (
-                      <div className="onboarding-step-list">
-                        {selectedGroup.onboarding_steps.map((step, index) => (
-                          <div key={`${selectedGroup.id}-step-${index}`} className="onboarding-step-card">
-                            <strong>{step.title ?? `Step ${index + 1}`}</strong>
-                            <p>{step.body ?? 'Complete this onboarding step.'}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
 
-                  <div className="group-admin-actions">
-                    <button className="secondary-button" type="button" onClick={() => handleToggleAnnouncementMode(selectedGroup)}>
-                      {selectedGroup.announcement_only ? 'Open discussion' : 'Make announcements'}
+                  {/* Group sections tab navigation */}
+                  <div className="group-tab-nav" role="tablist" aria-label="Group sections">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activeGroupTab === 'chat'}
+                      className={`group-tab-btn ${activeGroupTab === 'chat' ? 'active' : ''}`}
+                      onClick={() => setActiveGroupTab('chat')}
+                    >
+                      💬 Chat Pod
                     </button>
                     <button
-                      className="secondary-button"
                       type="button"
-                      disabled={selectedGroup.verification_status === 'pending' || selectedGroup.is_verified}
-                      onClick={() => handleRequestVerification(selectedGroup.id)}
+                      role="tab"
+                      aria-selected={activeGroupTab === 'members'}
+                      className={`group-tab-btn ${activeGroupTab === 'members' ? 'active' : ''}`}
+                      onClick={() => setActiveGroupTab('members')}
                     >
-                      {selectedGroup.is_verified ? 'Verified' : selectedGroup.verification_status === 'pending' ? 'Verification pending' : 'Request verification'}
+                      👥 Members ({selectedGroup.member_count})
                     </button>
-                  </div>
-
-                  <div className="event-panel">
-                    <div className="groups-panel-header"><h3 className="hero-label">Events</h3></div>
-                    <form className="event-form" onSubmit={handleCreateEvent}>
-                      <input value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Event title" />
-                      <input type="datetime-local" value={eventStart} onChange={(e) => setEventStart(e.target.value)} />
-                      <input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Location or meeting link" />
-                      <label className="toggle-row">
-                        <input type="checkbox" checked={eventOnline} onChange={(e) => setEventOnline(e.target.checked)} />
-                        Online
-                      </label>
-                      <button className="secondary-button" type="submit">Schedule</button>
-                    </form>
-                    <div className="event-list">
-                      {events.length ? events.map((event) => (
-                        <div key={event.id} className="event-card">
-                          <strong>{event.title}</strong>
-                          <span>{new Date(event.starts_at).toLocaleString()}</span>
-                          <span>{event.is_online ? 'Online' : event.location ?? 'In person'}</span>
-                        </div>
-                      )) : <p className="small-note">No events scheduled.</p>}
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleSendMessage} className="message-input group-chat-form">
-                    <input
-                      placeholder={selectedGroup.announcement_only ? 'Post an announcement...' : 'Write a group message...'}
-                      value={messageDraft}
-                      onChange={(e) => setMessageDraft(e.target.value)}
-                    />
-                    <button className="primary-button" type="submit" disabled={messagesLoading}>Send</button>
-                  </form>
-
-                  <div className="invite-panel">
-                    <label>
-                      Invite user by ID
-                      <input type="text" value={inviteUserId} onChange={(e) => setInviteUserId(e.target.value)} placeholder="Paste a user id" />
-                    </label>
-                    <button className="secondary-button" type="button" disabled={!inviteUserId.trim()} onClick={() => handleInviteUser(selectedGroup.id)}>
-                      Send invite
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activeGroupTab === 'events'}
+                      className={`group-tab-btn ${activeGroupTab === 'events' ? 'active' : ''}`}
+                      onClick={() => setActiveGroupTab('events')}
+                    >
+                      📅 Events & Onboarding
                     </button>
-                  </div>
-
-                  <div className="thread-messages" role="log" aria-live="polite" aria-atomic="false">
-                    {messagesLoading ? <p>Loading messages...</p> : null}
-                    {import.meta.env.DEV ? <div className="dev-badge">Group render count: {renderCount}</div> : null}
-                    {groupMessages.length === 0 && !messagesLoading ? (
-                      <p>No messages yet.</p>
-                    ) : groupMessages.length > 20 ? (
-                      <div ref={listContainerRef} className="virtualized-group-thread-list">
-                        <VirtualizedList
-                          items={groupMessages}
-                          itemHeight={estimateGroupMessageHeight}
-                          estimatedItemHeight={110}
-                          height={groupListHeight}
-                          overscan={6}
-                          className="virtualized-message-list"
-                          renderItem={(message) => (
-                            <div key={message.id} className="message-row incoming group-message-row">
-                              <div className="group-message-body">
-                                <small>{message.sender_alias ?? message.sender_id ?? 'Unknown'} - {new Date(message.timestamp).toLocaleString()}</small>
-                                <p className={isEncryptedToken(message.content) ? 'encrypted-message-placeholder' : undefined}>
-                                  {displayMessageContent(message.content)}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        />
-                      </div>
-                    ) : (
-                      groupMessages.map((message) => (
-                        <div key={message.id} className="message-row incoming group-message-row">
-                          <div className="group-message-body">
-                            <small>{message.sender_alias ?? message.sender_id ?? 'Unknown'} - {new Date(message.timestamp).toLocaleString()}</small>
-                            <p className={isEncryptedToken(message.content) ? 'encrypted-message-placeholder' : undefined}>
-                              {displayMessageContent(message.content)}
-                            </p>
-                          </div>
-                        </div>
-                      ))
+                    {isCurrentGroupAdmin && (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeGroupTab === 'admin'}
+                        className={`group-tab-btn ${activeGroupTab === 'admin' ? 'active' : ''}`}
+                        onClick={() => setActiveGroupTab('admin')}
+                      >
+                        🛡️ Admin Settings
+                      </button>
                     )}
                   </div>
+
+                  {/* TAB 1: Chat Thread */}
+                  {activeGroupTab === 'chat' && (
+                    <div className="group-tab-panel chat-pod-panel">
+                      {selectedGroup.announcement_only && (
+                        <div className="announcement-banner">
+                          📢 <strong>Announcement Channel:</strong> Only admins can broadcast messages here.
+                        </div>
+                      )}
+
+                      {activePinnedMessage && (
+                        <div
+                          className="group-pinned-banner"
+                          onClick={() => {
+                            const idx = renderableGroupMessages.findIndex((m) => m.data.id === activePinnedMessage.id);
+                            if (idx !== -1 && groupVirtualListRef.current) {
+                              groupVirtualListRef.current.scrollToItem(idx, 'center');
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              const idx = renderableGroupMessages.findIndex((m) => m.data.id === activePinnedMessage.id);
+                              if (idx !== -1 && groupVirtualListRef.current) {
+                                groupVirtualListRef.current.scrollToItem(idx, 'center');
+                              }
+                            }
+                          }}
+                        >
+                          📌 <strong>Pinned Announcement:</strong> {displayMessageContent(activePinnedMessage.content).slice(0, 60)}...
+                        </div>
+                      )}
+
+                      <div className="thread-messages" role="log" aria-live="polite" aria-atomic="false">
+                        <div className="chat-wallpaper" aria-hidden="true" />
+                        {messagesLoading ? <p>Loading messages...</p> : null}
+                        {import.meta.env.DEV ? <div className="dev-badge">Group render count: {renderCount}</div> : null}
+                        {groupMessages.length === 0 && !messagesLoading ? (
+                          <p className="empty-chat-placeholder">No messages yet. Send a message to start the conversation!</p>
+                        ) : renderableGroupMessages.length > 20 ? (
+                          <div ref={listContainerRef} className="virtualized-group-thread-list">
+                            <VirtualizedList
+                              items={renderableGroupMessages}
+                              itemHeight={estimateGroupMessageHeight}
+                              estimatedItemHeight={110}
+                              height={groupListHeight}
+                              overscan={6}
+                              listRef={groupVirtualListRef}
+                              className="virtualized-message-list"
+                              renderItem={(item) => {
+                                const message = item.data;
+                                const isConsecutive = item.isConsecutive;
+                                const isOutgoing = message.sender_id === currentUserProfile?.id;
+                                return (
+                                  <div key={message.id} className={`message-row ${isOutgoing ? 'outgoing' : 'incoming'} group-message-row ${isConsecutive ? 'consecutive' : ''}`}>
+                                    <div className="group-message-body">
+                                      {!isConsecutive && (
+                                        <small className="group-message-sender-header">
+                                          <strong style={{ color: getHashColor(message.sender_alias ?? message.sender_id ?? 'Unknown') }}>
+                                            {message.sender_alias ?? message.sender_id ?? 'Unknown'}
+                                          </strong> · {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          {selectedGroup.created_by === message.sender_id && <span className="role-badgeowner">Owner</span>}
+                                        </small>
+                                      )}
+                                      <p className={isEncryptedToken(message.content) ? 'encrypted-message-placeholder' : undefined}>
+                                        {displayMessageContent(message.content)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          renderableGroupMessages.map((item) => {
+                            const message = item.data;
+                            const isConsecutive = item.isConsecutive;
+                            const isOutgoing = message.sender_id === currentUserProfile?.id;
+                            return (
+                              <div key={message.id} className={`message-row ${isOutgoing ? 'outgoing' : 'incoming'} group-message-row ${isConsecutive ? 'consecutive' : ''}`}>
+                                <div className="group-message-body">
+                                  {!isConsecutive && (
+                                    <small className="group-message-sender-header">
+                                      <strong style={{ color: getHashColor(message.sender_alias ?? message.sender_id ?? 'Unknown') }}>
+                                        {message.sender_alias ?? message.sender_id ?? 'Unknown'}
+                                      </strong> · {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      {selectedGroup.created_by === message.sender_id && <span className="role-badgeowner">Owner</span>}
+                                    </small>
+                                  )}
+                                  <p className={isEncryptedToken(message.content) ? 'encrypted-message-placeholder' : undefined}>
+                                    {displayMessageContent(message.content)}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {(!selectedGroup.announcement_only || isCurrentGroupAdmin) && (
+                        <form onSubmit={handleSendMessage} className="message-input group-chat-form floating-input-bar">
+                          <input
+                            placeholder={selectedGroup.announcement_only ? 'Post an announcement...' : 'Write a group message...'}
+                            value={messageDraft}
+                            onChange={(e) => setMessageDraft(e.target.value)}
+                            aria-label="Group message text"
+                          />
+                          <button className="primary-button send-btn" type="submit" disabled={messagesLoading}>➤</button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 2: Members List */}
+                  {activeGroupTab === 'members' && (
+                    <div className="group-tab-panel group-members-panel">
+                      <div className="invite-panel glass-panel">
+                        <h4>Invite user by ID</h4>
+                        <div className="settings-row">
+                          <input type="text" value={inviteUserId} onChange={(e) => setInviteUserId(e.target.value)} placeholder="Paste a user id" />
+                          <button className="primary-button" type="button" disabled={!inviteUserId.trim()} onClick={() => handleInviteUser(selectedGroup.id)}>
+                            Send Invite
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="members-panel glass-panel">
+                        <div className="groups-panel-header"><h3 className="hero-label">Members & Roles</h3></div>
+                        <div className="members-list">
+                          {groupMembers.length ? groupMembers.map((member) => (
+                            <div key={member.user_id} className="member-card">
+                              <div className="member-info">
+                                <strong>{member.alias ?? 'Group Member'}</strong>
+                                <small className="member-id-label">@{member.user_id.slice(0, 8)}</small>
+                                <span className={`role-badge ${member.role}`}>{member.role}</span>
+                              </div>
+                              {isCurrentGroupAdmin && currentUserProfile?.id !== member.user_id && member.role !== 'owner' ? (
+                                <div className="member-actions">
+                                  <select
+                                    value={member.role}
+                                    onChange={(e) => void handleUpdateMemberRole(member.user_id, e.target.value)}
+                                    className="role-select"
+                                  >
+                                    <option value="member">Member</option>
+                                    <option value="moderator">Moderator</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                </div>
+                              ) : null}
+                            </div>
+                          )) : <p className="small-note">No members loaded.</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: Events & Onboarding */}
+                  {activeGroupTab === 'events' && (
+                    <div className="group-tab-panel group-events-panel">
+                      <div className="advanced-group-dashboard glass-panel">
+                        <h4>Group Dashboard & Checklist</h4>
+                        <div className="metric-strip">
+                          <span><strong>{selectedGroup.member_count}</strong> members</span>
+                          <span><strong>{selectedGroup.message_count}</strong> messages</span>
+                          <span><strong>{selectedGroup.event_count}</strong> events</span>
+                          <span><strong>{analytics?.growth_percent ?? 0}%</strong> growth</span>
+                        </div>
+                        {selectedGroup.welcome_message ? <p className="privacy-explainer">{selectedGroup.welcome_message}</p> : null}
+
+                        {selectedGroup.onboarding_steps?.length ? (
+                          <div className="onboarding-step-list-wrapper">
+                            {(() => {
+                              const stepsCount = selectedGroup.onboarding_steps.length;
+                              const doneCount = selectedGroup.onboarding_steps.filter(
+                                (_, idx) => !!completedSteps[`${selectedGroup.id}-step-${idx}`]
+                              ).length;
+                              const pct = Math.round((doneCount / stepsCount) * 100);
+                              return (
+                                <div className="onboarding-progress-container">
+                                  <div className="onboarding-progress-header">
+                                    <span>Checklist completion</span>
+                                    <strong>{pct}%</strong>
+                                  </div>
+                                  <div className="onboarding-progress-bar-track">
+                                    <div className="onboarding-progress-bar-fill" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            <h5>Onboarding Checklist</h5>
+                            <div className="onboarding-step-list">
+                              {selectedGroup.onboarding_steps.map((step, index) => {
+                                const stepId = `${selectedGroup.id}-step-${index}`;
+                                const isDone = !!completedSteps[stepId];
+                                return (
+                                  <div key={stepId} className={`onboarding-step-card ${isDone ? 'done' : ''}`}>
+                                    <label className="onboarding-step-checkbox-row">
+                                      <input
+                                        type="checkbox"
+                                        checked={isDone}
+                                        onChange={() => toggleOnboardingStep(stepId)}
+                                      />
+                                      <div>
+                                        <strong>{step.title ?? `Step ${index + 1}`}</strong>
+                                        <p>{step.body ?? 'Complete this onboarding step.'}</p>
+                                      </div>
+                                    </label>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="event-panel glass-panel">
+                        <div className="groups-panel-header"><h3 className="hero-label">Events</h3></div>
+                        <form className="event-form" onSubmit={handleCreateEvent}>
+                          <input value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Event title" />
+                          <input type="datetime-local" value={eventStart} onChange={(e) => setEventStart(e.target.value)} />
+                          <input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Location or meeting link" />
+                          <label className="toggle-row">
+                            <input type="checkbox" checked={eventOnline} onChange={(e) => setEventOnline(e.target.checked)} />
+                            Online
+                          </label>
+                          <button className="primary-button" type="submit">Schedule</button>
+                        </form>
+                        <div className="event-list">
+                          {events.length ? events.map((event) => (
+                            <div key={event.id} className="event-card">
+                              <strong>{event.title}</strong>
+                              <span>{new Date(event.starts_at).toLocaleString()}</span>
+                              <span>{event.is_online ? 'Online' : event.location ?? 'In person'}</span>
+                            </div>
+                          )) : <p className="small-note">No events scheduled.</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 4: Admin Moderation */}
+                  {activeGroupTab === 'admin' && isCurrentGroupAdmin && (
+                    <div className="group-tab-panel group-admin-panel glass-panel">
+                      <h4>Group Settings</h4>
+                      <div className="group-admin-actions">
+                        <button className="secondary-button" type="button" onClick={() => handleToggleAnnouncementMode(selectedGroup)}>
+                          {selectedGroup.announcement_only ? 'Open discussion' : 'Make announcements'}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={selectedGroup.verification_status === 'pending' || selectedGroup.is_verified}
+                          onClick={() => handleRequestVerification(selectedGroup.id)}
+                        >
+                          {selectedGroup.is_verified ? 'Verified' : selectedGroup.verification_status === 'pending' ? 'Verification pending' : 'Request verification'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="empty-state-card">

@@ -440,7 +440,8 @@ function Feed() {
                   <div className="feed-actions">
                     <button
                       type="button"
-                      className={liked ? 'primary-button' : 'secondary-button'}
+                      className={`feed-action-btn like-btn ${liked ? 'active' : ''}`}
+                      aria-label={liked ? 'Unlike post' : 'Like post'}
                       onClick={async () => {
                         const currentLike = likeState ?? { likes: 0, liked: false, post_id: post.id };
                         const optimisticLike = {
@@ -458,12 +459,14 @@ function Feed() {
                         }
                       }}
                     >
-                      {liked ? 'Unlike' : 'Like'} ({likes})
+                      <span className="action-icon">❤️</span>
+                      <span className="action-count">{likes}</span>
                     </button>
 
                     <button
                       type="button"
-                      className={reposted ? 'primary-button' : 'secondary-button'}
+                      className={`feed-action-btn repost-btn ${reposted ? 'active' : ''}`}
+                      aria-label={reposted ? 'Unrepost' : 'Repost'}
                       onClick={async () => {
                         const currentRepost = repostState ?? { reposts: 0, reposted: false, post_id: post.id };
                         const optimisticRepost = {
@@ -481,7 +484,17 @@ function Feed() {
                         }
                       }}
                     >
-                      {reposted ? 'Unrepost' : 'Repost'} ({reposts})
+                      <span className="action-icon">🔁</span>
+                      <span className="action-count">{reposts}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="feed-action-btn comment-btn"
+                      aria-label="View or write comments"
+                    >
+                      <span className="action-icon">💬</span>
+                      <span className="action-count">{comments.length}</span>
                     </button>
                   </div>
 

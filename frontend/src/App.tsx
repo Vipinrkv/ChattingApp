@@ -104,13 +104,13 @@ function App() {
     setUpdateReady(false);
   };
 
+  const publicRoutes = ['/login', '/register'];
+  const hideLayout = publicRoutes.includes(location.pathname) || (!user && location.pathname === '/');
+  useSwipeNavigation(Boolean(user && !hideLayout && !loading));
+
   if (loading) {
     return <div className="page-loading">Loading authentication...</div>;
   }
-
-  const publicRoutes = ['/login', '/register'];
-  const hideLayout = publicRoutes.includes(location.pathname) || (!user && location.pathname === '/');
-  useSwipeNavigation(Boolean(user && !hideLayout));
 
   const shellClass = ['app-shell', themeClass, !hideLayout && user ? 'app-shell-authenticated' : 'app-shell-public']
     .filter(Boolean)

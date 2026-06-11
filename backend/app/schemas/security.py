@@ -138,3 +138,8 @@ class SecretRotationResponse(BaseModel):
 class JWTTokenResponse(BaseModel):
     access_token: str
     expires_in: int
+
+
+class SessionRefreshRequest(BaseModel):
+    refresh_token: str
+    device_id: str

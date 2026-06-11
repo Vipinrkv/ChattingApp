@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Groups', path: '/groups', icon: 'G' },
   { label: 'Friends', path: '/friends', icon: '+' },
   { label: 'Profile', path: '/profile', icon: 'P' },
+  { label: 'Settings', path: '/settings', icon: 'S' },
   { label: 'Admin', path: '/admin', icon: 'A' },
 ];
 

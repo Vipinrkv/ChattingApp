@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 def _ssl_mode(database_url: str) -> str | None:
+    if database_url.startswith("sqlite"):
+        return None
     if settings.DB_SSL_MODE is not None:
         return settings.DB_SSL_MODE.lower()
 

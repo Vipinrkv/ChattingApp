@@ -32,6 +32,9 @@ class Settings(BaseSettings):
         os.path.join(os.path.dirname(__file__), "firebase_key.json"),
     )
 
+    # Supabase Fallback
+    SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
+
     # JWT
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
     JWT_ALGORITHM: str = "HS256"

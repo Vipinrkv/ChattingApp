@@ -1,10 +1,12 @@
 from datetime import datetime
 import re
+import uuid
 from collections import Counter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import desc, or_, and_
-from app.core.pagination import apply_cursor_filter
+from sqlalchemy import desc, or_, and_, func
+from sqlalchemy.orm import selectinload
+from app.core.pagination import apply_tuple_cursor_filter, decode_cursor, encode_cursor
 from app.core.redis_cache import redis_cache
 from app.core.config import settings
 from app.models.post import Post, PostVisibility
@@ -14,9 +16,9 @@ from app.models.block import Block
 from app.models.post_like import PostLike
 from app.models.post_repost import PostRepost
 from app.models.post_comment import PostComment
+from app.services.user_feed_control_service import UserFeedControlService
 
 import logging
-from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,8 @@ logger = logging.getLogger(__name__)
 class FeedService:
     @staticmethod
     async def _load_relationships(session: AsyncSession, user_id: str) -> dict[str, list[str]]:
-        cache_key = f"user:relations:{user_id}"
+        user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+        cache_key = f"user:relations:{user_uuid}"
         if redis_cache.enabled:
             cached = await redis_cache.get_json(cache_key)
             if cached:
@@ -35,8 +38,8 @@ class FeedService:
             .where(FriendRequest.status == FriendRequestStatus.ACCEPTED)
             .where(
                 or_(
-                    FriendRequest.requester_id == user_id,
-                    FriendRequest.addressee_id == user_id,
+                    FriendRequest.requester_id == user_uuid,
+                    FriendRequest.addressee_id == user_uuid,
                 )
             )
         )
@@ -44,16 +47,16 @@ class FeedService:
             str(friend_id)
             for pair in friends_result.all()
             for friend_id in pair
-            if str(friend_id) != str(user_id)
+            if friend_id != user_uuid
         ]
 
         following_result = await session.execute(
-            select(Follower.following_id).where(Follower.follower_id == user_id)
+            select(Follower.following_id).where(Follower.follower_id == user_uuid)
         )
         following = [str(item) for item in following_result.scalars().all()]
 
         blocked_result = await session.execute(
-            select(Block.blocked_user_id).where(Block.blocker_id == user_id)
+            select(Block.blocked_user_id).where(Block.blocker_id == user_uuid)
         )
         blocked = [str(item) for item in blocked_result.scalars().all()]
 
@@ -69,20 +72,25 @@ class FeedService:
 
     @staticmethod
     def _visible_post_filter(user_id: str, friends: list[str], following: list[str], blocked: list[str]):
+        user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+        friends_uuids = [uuid.UUID(f) if isinstance(f, str) else f for f in friends]
+        following_uuids = [uuid.UUID(f) if isinstance(f, str) else f for f in following]
+        blocked_uuids = [uuid.UUID(b) if isinstance(b, str) else b for b in blocked]
+
         return and_(
             or_(
-                Post.user_id == user_id,
+                Post.user_id == user_uuid,
                 and_(
-                    Post.user_id.in_(friends),
+                    Post.user_id.in_(friends_uuids),
                     Post.visibility.in_([PostVisibility.FRIENDS, PostVisibility.PUBLIC]),
                 ),
                 and_(
-                    Post.user_id.in_(following),
+                    Post.user_id.in_(following_uuids),
                     Post.visibility.in_([PostVisibility.FOLLOWERS, PostVisibility.PUBLIC]),
                 ),
                 Post.visibility == PostVisibility.PUBLIC,
             ),
-            ~Post.user_id.in_(blocked),
+            ~Post.user_id.in_(blocked_uuids),
         )
 
     @staticmethod
@@ -91,11 +99,12 @@ class FeedService:
 
     @staticmethod
     async def _build_interest_profile(session: AsyncSession, user_id: str) -> dict[str, float]:
+        user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
         return_values = {}
         topic_counter = Counter()
 
         recent_own_posts = await session.execute(
-            select(Post).where(Post.user_id == user_id).order_by(desc(Post.created_at)).limit(50)
+            select(Post).where(Post.user_id == user_uuid).order_by(desc(Post.created_at)).limit(50)
         )
         for post in recent_own_posts.scalars().all():
             topic_counter.update(FeedService.extract_hashtags(post.content))
@@ -103,7 +112,7 @@ class FeedService:
         liked_posts = await session.execute(
             select(Post)
             .join(PostLike, PostLike.post_id == Post.id)
-            .where(PostLike.user_id == user_id)
+            .where(PostLike.user_id == user_uuid)
             .order_by(desc(Post.created_at))
             .limit(50)
         )
@@ -136,21 +145,39 @@ class FeedService:
         return engagement_score * recency_factor * topic_factor + max(0.01, 1.0 / (1.0 + age_hours))
 
     @staticmethod
+    def _apply_feed_controls_filter(query, control):
+        # 1. Filter muted words
+        if control.muted_words:
+            for word in control.muted_words:
+                normalized = word.strip().lower()
+                if normalized:
+                    query = query.where(~Post.content.ilike(f"%{normalized}%"))
+
+        # 2. Filter sensitive content if hidden
+        if control.sensitive_content_hidden:
+            sensitive_tags = ["#nsfw", "#sensitive", "#18+", "#adult", "#nudity"]
+            for tag in sensitive_tags:
+                query = query.where(~Post.content.ilike(f"%{tag}%"))
+
+        return query
+
+    @staticmethod
     async def get_feed(
         session: AsyncSession,
         user_id: str,
-        before: datetime | None = None,
+        cursor: str | None = None,
         skip: int = 0,
         limit: int = 20,
     ):
-        """Get user's personalized feed"""
+        """Get user's personalized feed with controls and durable cursor pagination"""
         relations = await FeedService._load_relationships(session, user_id)
         friends = relations["friends"]
         following = relations["following"]
         blocked = relations["blocked"]
 
-        # Build query - include user's own posts and posts from friends/followers
-        interest_weights = await FeedService._build_interest_profile(session, user_id)
+        # Fetch Feed Settings
+        control = await UserFeedControlService.get_controls(session, uuid.UUID(user_id))
+
         query = (
             select(
                 Post,
@@ -158,6 +185,7 @@ class FeedService:
                 func.count(PostRepost.id).label("repost_count"),
                 func.count(PostComment.id).label("comment_count"),
             )
+            .options(selectinload(Post.quoted_post))
             .outerjoin(PostLike, PostLike.post_id == Post.id)
             .outerjoin(PostRepost, PostRepost.post_id == Post.id)
             .outerjoin(PostComment, PostComment.post_id == Post.id)
@@ -165,10 +193,23 @@ class FeedService:
             .group_by(Post.id)
         )
 
-        query = apply_cursor_filter(query, Post.created_at, before)
+        query = FeedService._apply_feed_controls_filter(query, control)
+        query = apply_tuple_cursor_filter(query, Post.created_at, Post.id, cursor)
+
+        if control.ranking_mode == "chronological":
+            query = query.order_by(desc(Post.created_at), desc(Post.id))
+            if skip:
+                query = query.offset(skip)
+            query = query.limit(limit)
+            result = await session.execute(query)
+            return [row[0] for row in result.all()]
+
+        # Engagement ranking mode (hybrid database/in-memory ranking)
+        interest_weights = await FeedService._build_interest_profile(session, user_id)
+        query = query.order_by(desc(Post.created_at), desc(Post.id))
+        query = query.limit(limit * 2)
         if skip:
             query = query.offset(skip)
-        query = query.limit(limit * 2)
 
         result = await session.execute(query)
         rows = result.all()
@@ -190,7 +231,7 @@ class FeedService:
         session: AsyncSession,
         user_id: str,
         search_term: str,
-        before: datetime | None = None,
+        cursor: str | None = None,
         skip: int = 0,
         limit: int = 20,
     ):
@@ -199,34 +240,23 @@ class FeedService:
         following = relations["following"]
         blocked = relations["blocked"]
 
+        # Load controls
+        control = await UserFeedControlService.get_controls(session, uuid.UUID(user_id))
+
         query = (
             select(Post)
+            .options(selectinload(Post.quoted_post))
             .where(
                 and_(
-                    or_(
-                        Post.user_id == user_id,
-                        and_(
-                            Post.user_id.in_(friends),
-                            Post.visibility.in_(
-                                [PostVisibility.FRIENDS, PostVisibility.PUBLIC]
-                            ),
-                        ),
-                        and_(
-                            Post.user_id.in_(following),
-                            Post.visibility.in_(
-                                [PostVisibility.FOLLOWERS, PostVisibility.PUBLIC]
-                            ),
-                        ),
-                        Post.visibility == PostVisibility.PUBLIC,
-                    ),
-                    ~Post.user_id.in_(blocked),
+                    FeedService._visible_post_filter(user_id, friends, following, blocked),
                     Post.content.ilike(f"%{search_term}%"),
                 )
             )
-            .order_by(desc(Post.created_at))
+            .order_by(desc(Post.created_at), desc(Post.id))
         )
 
-        query = apply_cursor_filter(query, Post.created_at, before)
+        query = FeedService._apply_feed_controls_filter(query, control)
+        query = apply_tuple_cursor_filter(query, Post.created_at, Post.id, cursor)
         if skip:
             query = query.offset(skip)
         query = query.limit(limit)
@@ -238,54 +268,35 @@ class FeedService:
     async def get_trending_feed(
         session: AsyncSession,
         user_id: str,
-        before: datetime | None = None,
+        cursor: str | None = None,
         skip: int = 0,
         limit: int = 20,
     ):
-        """Get a personalized trending feed ordered by engagement score."""
         relations = await FeedService._load_relationships(session, user_id)
         friends = relations["friends"]
         following = relations["following"]
         blocked = relations["blocked"]
 
+        control = await UserFeedControlService.get_controls(session, uuid.UUID(user_id))
+
         like_count = func.count(PostLike.id)
         repost_count = func.count(PostRepost.id)
         comment_count = func.count(PostComment.id)
-
         score = like_count + repost_count + comment_count
 
-        # Note: join aggregates to compute score; filter stays same as get_feed.
         query = (
             select(Post)
+            .options(selectinload(Post.quoted_post))
             .outerjoin(PostLike, PostLike.post_id == Post.id)
             .outerjoin(PostRepost, PostRepost.post_id == Post.id)
             .outerjoin(PostComment, PostComment.post_id == Post.id)
-            .where(
-                and_(
-                    or_(
-                        Post.user_id == user_id,
-                        and_(
-                            Post.user_id.in_(friends),
-                            Post.visibility.in_(
-                                [PostVisibility.FRIENDS, PostVisibility.PUBLIC]
-                            ),
-                        ),
-                        and_(
-                            Post.user_id.in_(following),
-                            Post.visibility.in_(
-                                [PostVisibility.FOLLOWERS, PostVisibility.PUBLIC]
-                            ),
-                        ),
-                        Post.visibility == PostVisibility.PUBLIC,
-                    ),
-                    ~Post.user_id.in_(blocked),
-                )
-            )
+            .where(FeedService._visible_post_filter(user_id, friends, following, blocked))
             .group_by(Post.id)
-            .order_by(desc(score), desc(Post.created_at))
+            .order_by(desc(score), desc(Post.created_at), desc(Post.id))
         )
 
-        query = apply_cursor_filter(query, Post.created_at, before)
+        query = FeedService._apply_feed_controls_filter(query, control)
+        query = apply_tuple_cursor_filter(query, Post.created_at, Post.id, cursor)
         if skip:
             query = query.offset(skip)
         query = query.limit(limit)
@@ -297,12 +308,13 @@ class FeedService:
     async def get_recommendations(
         session: AsyncSession,
         user_id: str,
-        before: datetime | None = None,
+        cursor: str | None = None,
         skip: int = 0,
         limit: int = 20,
     ):
         relations = await FeedService._load_relationships(session, user_id)
         blocked = relations["blocked"]
+        control = await UserFeedControlService.get_controls(session, uuid.UUID(user_id))
         interest_weights = await FeedService._build_interest_profile(session, user_id)
 
         query = (
@@ -312,6 +324,7 @@ class FeedService:
                 func.count(PostRepost.id).label("repost_count"),
                 func.count(PostComment.id).label("comment_count"),
             )
+            .options(selectinload(Post.quoted_post))
             .outerjoin(PostLike, PostLike.post_id == Post.id)
             .outerjoin(PostRepost, PostRepost.post_id == Post.id)
             .outerjoin(PostComment, PostComment.post_id == Post.id)
@@ -325,7 +338,10 @@ class FeedService:
             .group_by(Post.id)
         )
 
-        query = apply_cursor_filter(query, Post.created_at, before)
+        query = FeedService._apply_feed_controls_filter(query, control)
+        query = apply_tuple_cursor_filter(query, Post.created_at, Post.id, cursor)
+        query = query.order_by(desc(Post.created_at), desc(Post.id))
+
         if skip:
             query = query.offset(skip)
         query = query.limit(limit * 2)
@@ -348,12 +364,13 @@ class FeedService:
     async def get_explore_feed(
         session: AsyncSession,
         user_id: str,
-        before: datetime | None = None,
+        cursor: str | None = None,
         skip: int = 0,
         limit: int = 20,
     ):
         relations = await FeedService._load_relationships(session, user_id)
         blocked = relations["blocked"]
+        control = await UserFeedControlService.get_controls(session, uuid.UUID(user_id))
         interest_weights = await FeedService._build_interest_profile(session, user_id)
 
         query = (
@@ -363,6 +380,7 @@ class FeedService:
                 func.count(PostRepost.id).label("repost_count"),
                 func.count(PostComment.id).label("comment_count"),
             )
+            .options(selectinload(Post.quoted_post))
             .outerjoin(PostLike, PostLike.post_id == Post.id)
             .outerjoin(PostRepost, PostRepost.post_id == Post.id)
             .outerjoin(PostComment, PostComment.post_id == Post.id)
@@ -376,7 +394,10 @@ class FeedService:
             .group_by(Post.id)
         )
 
-        query = apply_cursor_filter(query, Post.created_at, before)
+        query = FeedService._apply_feed_controls_filter(query, control)
+        query = apply_tuple_cursor_filter(query, Post.created_at, Post.id, cursor)
+        query = query.order_by(desc(Post.created_at), desc(Post.id))
+
         if skip:
             query = query.offset(skip)
         query = query.limit(limit * 3)
@@ -432,7 +453,7 @@ class FeedService:
         session: AsyncSession,
         tag: str,
         user_id: str,
-        before: datetime | None = None,
+        cursor: str | None = None,
         skip: int = 0,
         limit: int = 20,
     ):
@@ -441,21 +462,45 @@ class FeedService:
         following = relations["following"]
         blocked = relations["blocked"]
 
+        control = await UserFeedControlService.get_controls(session, uuid.UUID(user_id))
+
         query = (
             select(Post)
+            .options(selectinload(Post.quoted_post))
             .where(
                 and_(
                     FeedService._visible_post_filter(user_id, friends, following, blocked),
                     Post.content.ilike(f"%#{tag.lower()}%"),
                 )
             )
-            .order_by(desc(Post.created_at))
+            .order_by(desc(Post.created_at), desc(Post.id))
         )
 
-        query = apply_cursor_filter(query, Post.created_at, before)
+        query = FeedService._apply_feed_controls_filter(query, control)
+        query = apply_tuple_cursor_filter(query, Post.created_at, Post.id, cursor)
         if skip:
             query = query.offset(skip)
         query = query.limit(limit)
 
         result = await session.execute(query)
         return result.scalars().all()
+
+    @staticmethod
+    async def get_global_trends(session: AsyncSession, limit: int = 10) -> list[dict]:
+        """Improved Trends System: dynamically aggregate top hashtags from public posts in the last 24 hours."""
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+        
+        stmt = select(Post.content).where(
+            Post.visibility == PostVisibility.PUBLIC,
+            Post.created_at >= cutoff
+        )
+        res = await session.execute(stmt)
+        contents = res.scalars().all()
+
+        hashtag_counts = Counter()
+        for content in contents:
+            hashtag_counts.update(FeedService.extract_hashtags(content))
+
+        top_trends = hashtag_counts.most_common(limit)
+        return [{"hashtag": tag, "count": count} for tag, count in top_trends]

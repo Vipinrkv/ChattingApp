@@ -35,7 +35,6 @@ class ChatBackup(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     backup_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -44,7 +43,6 @@ class ChatBackup(Base):
         SQLEnum(BackupStatus, name="backupstatus", values_callable=lambda enum: [item.value for item in enum]),
         default=BackupStatus.PENDING,
         nullable=False,
-        index=True,
     )
     storage_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     storage_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
@@ -54,7 +52,6 @@ class ChatBackup(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        index=True,
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

@@ -77,6 +77,7 @@ function AdminDashboard() {
   const [platform, setPlatform] = useState<PlatformSummary | null>(null);
   const [enterprise, setEnterprise] = useState<EnterpriseSummary | null>(null);
   const [globalization, setGlobalization] = useState<GlobalizationSummary | null>(null);
+  const [pendingGroups, setPendingGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +86,7 @@ function AdminDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [reportData, healthData, analyticsData, scalingData, platformData, enterpriseData, globalizationData] = await Promise.all([
+      const [reportData, healthData, analyticsData, scalingData, platformData, enterpriseData, globalizationData, pendingGroupsData] = await Promise.all([
         apiGet('/api/v1/admin/reports?limit=25'),
         apiGet('/health/details'),
         apiGet('/api/v1/analytics/admin/summary?days=30'),
@@ -93,6 +94,7 @@ function AdminDashboard() {
         apiGet('/api/v1/platform/summary'),
         apiGet('/api/v1/enterprise/summary'),
         apiGet('/api/v1/globalization/summary'),
+        apiGet('/api/v1/admin/groups/pending'),
       ]);
       setReports(Array.isArray(reportData) ? reportData : reportData?.data ?? []);
       setHealth(healthData?.data ?? healthData);
@@ -101,6 +103,7 @@ function AdminDashboard() {
       setPlatform(platformData?.data ?? platformData);
       setEnterprise(enterpriseData?.data ?? enterpriseData);
       setGlobalization(globalizationData?.data ?? globalizationData);
+      setPendingGroups(Array.isArray(pendingGroupsData) ? pendingGroupsData : pendingGroupsData?.data ?? []);
     } catch (err) {
       setError(normalizeError(err, 'Could not load admin console.').message);
     } finally {
@@ -122,6 +125,32 @@ function AdminDashboard() {
       await loadAdminData();
     } catch (err) {
       setError(normalizeError(err, 'Could not resolve report.').message);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleApproveVerification = async (groupId: string) => {
+    setActionId(groupId);
+    setError(null);
+    try {
+      await apiPost(`/api/v1/admin/groups/${groupId}/verify/approve`, {});
+      await loadAdminData();
+    } catch (err) {
+      setError(normalizeError(err, 'Could not approve verification.').message);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleRejectVerification = async (groupId: string) => {
+    setActionId(groupId);
+    setError(null);
+    try {
+      await apiPost(`/api/v1/admin/groups/${groupId}/verify/reject`, {});
+      await loadAdminData();
+    } catch (err) {
+      setError(normalizeError(err, 'Could not reject verification.').message);
     } finally {
       setActionId(null);
     }
@@ -307,6 +336,52 @@ function AdminDashboard() {
             </div>
           ) : (
             <div className="empty-state-card">No reports are waiting for review.</div>
+          )}
+        </article>
+
+        <article className="card admin-card">
+          <div className="panel-header">
+            <div>
+              <p className="hero-label">Queue</p>
+              <h2>Group Verifications</h2>
+            </div>
+            <span className="status-pill">{pendingGroups.length}</span>
+          </div>
+
+          {pendingGroups.length ? (
+            <div className="admin-report-list">
+              {pendingGroups.map((group) => (
+                <div className="admin-report-row" key={group.id}>
+                  <div>
+                    <strong>{group.name}</strong>
+                    <p>{group.type} - {group.category ?? 'Uncategorized'}</p>
+                    <small>Created by: {group.created_by}</small>
+                  </div>
+                  <div className="admin-report-actions">
+                    <button
+                      className="secondary-button success"
+                      type="button"
+                      disabled={actionId === group.id}
+                      onClick={() => void handleApproveVerification(group.id)}
+                      style={{ background: 'rgba(34, 197, 94, 0.16)', color: 'var(--success)' }}
+                    >
+                      {actionId === group.id ? 'Processing...' : 'Approve'}
+                    </button>
+                    <button
+                      className="secondary-button danger"
+                      type="button"
+                      disabled={actionId === group.id}
+                      onClick={() => void handleRejectVerification(group.id)}
+                      style={{ background: 'rgba(239, 68, 68, 0.16)', color: 'var(--danger)' }}
+                    >
+                      {actionId === group.id ? 'Processing...' : 'Reject'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state-card">No group verification requests pending.</div>
           )}
         </article>
       </section>

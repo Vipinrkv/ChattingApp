@@ -269,16 +269,23 @@ function Profile() {
         </div>
       </div>
 
-      <section className="profile-view-card glass-panel">
-        <div>
-          <span className="hero-label">Profile preview</span>
-          <h3>{publicProfileName}</h3>
-          <p>{localProfile.privacy.profileVisibility === 'anonymous' ? 'Minimal identity shown publicly.' : bio || 'Bio appears here when visible.'}</p>
+      <section className="profile-stats-grid">
+        <div className="profile-stat-column">
+          <span className="stat-label-hero">Mutual Friends</span>
+          <span className="stat-value-bold">Visible</span>
+          <small className="stat-desc-muted">When permitted by peers</small>
         </div>
-        <div className="profile-preview-meta">
-          <span className="pill soft">Mutual friends: visible when allowed</span>
-          <span className="pill soft">Groups: {localProfile.privacy.profileVisibility === 'private' ? 'restricted' : 'previewable'}</span>
-          <span className="pill soft">Posts: follows post visibility</span>
+        <div className="profile-stat-column">
+          <span className="stat-label-hero">Groups Visibility</span>
+          <span className="stat-value-bold">
+            {localProfile.privacy.profileVisibility === 'private' ? 'Restricted' : 'Previewable'}
+          </span>
+          <small className="stat-desc-muted">Based on privacy level</small>
+        </div>
+        <div className="profile-stat-column">
+          <span className="stat-label-hero">Feed Visibility</span>
+          <span className="stat-value-bold">Controlled</span>
+          <small className="stat-desc-muted">Follows post settings</small>
         </div>
       </section>
 
@@ -417,6 +424,33 @@ function Profile() {
                   </div>
                 </label>
                 <p className="privacy-explainer">{visibilityExplainer}</p>
+                <div className="security-trust-advisory glass-panel">
+                  <h4>🛡️ Security & Trust Advisor</h4>
+                  <p className="small-note">Ensure your profile settings align with your personal privacy goals:</p>
+                  <ul className="security-checklist-ul">
+                    <li>
+                      <span className="check-bullet">✓</span>
+                      <span><strong>Visibility Guard:</strong> "{localProfile.privacy.profileVisibility}" mode is active. {
+                        localProfile.privacy.profileVisibility === 'anonymous' ? 'Your real name is hidden from peer discoverability.' :
+                        localProfile.privacy.profileVisibility === 'private' ? 'Search listings will exclude your account details.' :
+                        localProfile.privacy.profileVisibility === 'friends' ? 'Only verified friends see rich bio content.' :
+                        'Your account profile is open to all users.'
+                      }</span>
+                    </li>
+                    <li>
+                      <span className="check-bullet">✓</span>
+                      <span><strong>Activity Signals:</strong> Currently {localProfile.privacy.showActivity ? 'sharing status' : 'hiding status'}. {
+                        localProfile.privacy.showActivity ? 'Peers see when you are online/busy/away.' : 'Your active status remains completely hidden.'
+                      }</span>
+                    </li>
+                    <li>
+                      <span className="check-bullet">✓</span>
+                      <span><strong>Inbound Message Security:</strong> {
+                        localProfile.privacy.allowMessages ? 'Open to receive new messages from non-friends.' : 'Restricted. Incoming chats from stranger accounts will be blocked.'
+                      }</span>
+                    </li>
+                  </ul>
+                </div>
                 <label className="toggle-row">
                   <input
                     type="checkbox"

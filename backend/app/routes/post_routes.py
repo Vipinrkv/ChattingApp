@@ -135,12 +135,20 @@ async def get_user_posts(
     return {"posts": visible_posts}
 
 
+@router.get("/trends")
+async def get_global_trends(
+    limit: int = Query(default=10, ge=1, le=50),
+    session: AsyncSession = Depends(get_db_session),
+):
+    return await FeedService.get_global_trends(session, limit)
+
+
 @router.get("/feed/{user_id}")
 async def get_user_feed(
     user_id: str,
     cursor: str | None = Query(
         default=None,
-        description="Optional ISO8601 timestamp cursor for pagination",
+        description="Optional base64 or ISO8601 cursor for pagination",
     ),
     skip: int = 0,
     limit: int = 20,
@@ -150,15 +158,10 @@ async def get_user_feed(
     if str(current_user.id) != str(user_id):
         raise _forbid_feed("Cannot read another user's personalized feed")
 
-    before = None
-    if cursor:
-        try:
-            before = parse_cursor(cursor)
-        except ValueError as exc:
-            raise _invalid_feed_cursor(exc) from exc
-
-    feed = await FeedService.get_feed(session, user_id, before, skip, limit)
-    return {"feed": feed}
+    feed = await FeedService.get_feed(session, user_id, cursor, skip, limit)
+    from app.core.pagination import encode_cursor
+    next_cursor = encode_cursor(feed[-1].created_at, feed[-1].id) if len(feed) > 0 else None
+    return {"feed": feed, "next_cursor": next_cursor}
 
 
 @router.get("/trending/{user_id}")
@@ -166,7 +169,7 @@ async def get_user_trending_feed(
     user_id: str,
     cursor: str | None = Query(
         default=None,
-        description="Optional ISO8601 timestamp cursor for pagination",
+        description="Optional base64 or ISO8601 cursor for pagination",
     ),
     skip: int = 0,
     limit: int = 20,
@@ -176,15 +179,10 @@ async def get_user_trending_feed(
     if str(current_user.id) != str(user_id):
         raise _forbid_feed("Cannot read another user's personalized trending feed")
 
-    before = None
-    if cursor:
-        try:
-            before = parse_cursor(cursor)
-        except ValueError as exc:
-            raise _invalid_feed_cursor(exc) from exc
-
-    feed = await FeedService.get_trending_feed(session, user_id, before, skip, limit)
-    return {"feed": feed}
+    feed = await FeedService.get_trending_feed(session, user_id, cursor, skip, limit)
+    from app.core.pagination import encode_cursor
+    next_cursor = encode_cursor(feed[-1].created_at, feed[-1].id) if len(feed) > 0 else None
+    return {"feed": feed, "next_cursor": next_cursor}
 
 
 @router.get("/recommendations/{user_id}")
@@ -192,7 +190,7 @@ async def get_user_recommendations(
     user_id: str,
     cursor: str | None = Query(
         default=None,
-        description="Optional ISO8601 timestamp cursor for pagination",
+        description="Optional base64 or ISO8601 cursor for pagination",
     ),
     skip: int = 0,
     limit: int = 20,
@@ -202,15 +200,10 @@ async def get_user_recommendations(
     if str(current_user.id) != str(user_id):
         raise _forbid_feed("Cannot read another user's recommendations")
 
-    before = None
-    if cursor:
-        try:
-            before = parse_cursor(cursor)
-        except ValueError as exc:
-            raise _invalid_feed_cursor(exc) from exc
-
-    feed = await FeedService.get_recommendations(session, user_id, before, skip, limit)
-    return {"feed": feed}
+    feed = await FeedService.get_recommendations(session, user_id, cursor, skip, limit)
+    from app.core.pagination import encode_cursor
+    next_cursor = encode_cursor(feed[-1].created_at, feed[-1].id) if len(feed) > 0 else None
+    return {"feed": feed, "next_cursor": next_cursor}
 
 
 @router.get("/explore/{user_id}")
@@ -218,7 +211,7 @@ async def get_user_explore_feed(
     user_id: str,
     cursor: str | None = Query(
         default=None,
-        description="Optional ISO8601 timestamp cursor for pagination",
+        description="Optional base64 or ISO8601 cursor for pagination",
     ),
     skip: int = 0,
     limit: int = 20,
@@ -228,15 +221,10 @@ async def get_user_explore_feed(
     if str(current_user.id) != str(user_id):
         raise _forbid_feed("Cannot read another user's explore feed")
 
-    before = None
-    if cursor:
-        try:
-            before = parse_cursor(cursor)
-        except ValueError as exc:
-            raise _invalid_feed_cursor(exc) from exc
-
-    feed = await FeedService.get_explore_feed(session, user_id, before, skip, limit)
-    return {"feed": feed}
+    feed = await FeedService.get_explore_feed(session, user_id, cursor, skip, limit)
+    from app.core.pagination import encode_cursor
+    next_cursor = encode_cursor(feed[-1].created_at, feed[-1].id) if len(feed) > 0 else None
+    return {"feed": feed, "next_cursor": next_cursor}
 
 
 @router.get("/analytics/{user_id}")
@@ -258,7 +246,7 @@ async def get_posts_by_hashtag(
     user_id: str = Query(..., description="Current user ID"),
     cursor: str | None = Query(
         default=None,
-        description="Optional ISO8601 timestamp cursor for pagination",
+        description="Optional base64 or ISO8601 cursor for pagination",
     ),
     skip: int = 0,
     limit: int = 20,
@@ -268,15 +256,10 @@ async def get_posts_by_hashtag(
     if str(current_user.id) != str(user_id):
         raise _forbid_feed("Cannot query hashtags for another user")
 
-    before = None
-    if cursor:
-        try:
-            before = parse_cursor(cursor)
-        except ValueError as exc:
-            raise _invalid_feed_cursor(exc) from exc
-
-    feed = await FeedService.get_posts_by_hashtag(session, tag, user_id, before, skip, limit)
-    return {"feed": feed}
+    feed = await FeedService.get_posts_by_hashtag(session, tag, user_id, cursor, skip, limit)
+    from app.core.pagination import encode_cursor
+    next_cursor = encode_cursor(feed[-1].created_at, feed[-1].id) if len(feed) > 0 else None
+    return {"feed": feed, "next_cursor": next_cursor}
 
 
 @router.post("/group/{group_id}/create", response_model=GroupPostResponse, status_code=status.HTTP_201_CREATED)

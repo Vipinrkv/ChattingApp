@@ -62,6 +62,7 @@ from app.routes.moderation_routes import router as moderation_routes
 from app.routes.ai_moderation_routes import router as ai_moderation_routes
 from app.routes.notification_pref_routes import router as notification_pref_routes
 from app.routes.security_routes import router as security_routes
+from app.routes import user_feed_control_routes, user_list_routes
 from app.services.notification_service import NotificationService
 from app.websocket import chat_socket, group_socket
 from app.websocket.redis_broker import redis_broker
@@ -315,6 +316,8 @@ app.include_router(enterprise_feature_routes.router, prefix="/api/v1/enterprise"
 app.include_router(globalization_feature_routes.router, prefix="/api/v1/globalization", tags=["globalization"])
 app.include_router(notification_pref_routes, prefix="/api/v1/notifications/preferences", tags=["notification_preferences"])
 app.include_router(security_routes, prefix="/api/v1/security", tags=["security"])
+app.include_router(user_feed_control_routes.router)
+app.include_router(user_list_routes.router)
 
 
 @app.exception_handler(APIException)

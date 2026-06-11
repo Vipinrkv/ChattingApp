@@ -5,12 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.post_repost import PostRepost
 from app.models.post import Post
 from app.services.notification_service import NotificationService
+from app.services.feed_event_chain_service import FeedEventChainService
 
 
 class PostRepostService:
     @staticmethod
     async def get_repost_count(session: AsyncSession, post_id: str) -> int:
-        post_uuid = uuid.UUID(post_id)
+        post_uuid = uuid.UUID(post_id) if isinstance(post_id, str) else post_id
         result = await session.execute(
             select(func.count(PostRepost.id)).where(PostRepost.post_id == post_uuid)
         )
@@ -22,7 +23,7 @@ class PostRepostService:
         post_id: str,
         user_id: uuid.UUID,
     ) -> bool:
-        post_uuid = uuid.UUID(post_id)
+        post_uuid = uuid.UUID(post_id) if isinstance(post_id, str) else post_id
         result = await session.execute(
             select(PostRepost.id).where(
                 PostRepost.post_id == post_uuid,
@@ -37,7 +38,7 @@ class PostRepostService:
         post_id: str,
         user_id: uuid.UUID,
     ) -> dict:
-        post_uuid = uuid.UUID(post_id)
+        post_uuid = uuid.UUID(post_id) if isinstance(post_id, str) else post_id
 
         existing_result = await session.execute(
             select(PostRepost.id).where(
@@ -47,7 +48,9 @@ class PostRepostService:
         )
         existing_id = existing_result.scalar_one_or_none()
 
+        action = "repost"
         if existing_id is not None:
+            action = "unrepost"
             await session.execute(delete(PostRepost).where(PostRepost.id == existing_id))
             await session.commit()
         else:
@@ -68,7 +71,17 @@ class PostRepostService:
             except Exception:
                 pass
 
+        # Log event in FeedEventChain
+        await FeedEventChainService.log_event(
+            session,
+            event_type="repost_toggled",
+            event_id=post_uuid,
+            user_id=user_id,
+            payload={"action": action},
+        )
+        await session.commit()
+
         count = await PostRepostService.get_repost_count(session, post_id)
         reposted = await PostRepostService.get_user_repost_state(session, post_id, user_id)
 
-        return {"post_id": post_id, "reposts": count, "reposted": reposted}
+        return {"post_id": str(post_id), "reposts": count, "reposted": reposted}

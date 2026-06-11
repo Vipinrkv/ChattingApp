@@ -33,6 +33,8 @@ class SessionService:
     ) -> Dict[str, Any]:
         """Create a new user session"""
         try:
+            if isinstance(user_id, str):
+                user_id = uuid.UUID(user_id)
             if expires_delta is None:
                 expires_delta = timedelta(days=30)  # Default 30-day session
             
@@ -81,6 +83,8 @@ class SessionService:
     ) -> Optional[Dict[str, Any]]:
         """Verify and validate refresh token"""
         try:
+            if isinstance(user_id, str):
+                user_id = uuid.UUID(user_id)
             token_hash = SessionService.hash_token(refresh_token)
             
             query = select(UserSession).where(
@@ -143,6 +147,8 @@ class SessionService:
     ) -> int:
         """Revoke all sessions for a user"""
         try:
+            if isinstance(user_id, str):
+                user_id = uuid.UUID(user_id)
             query = select(UserSession).where(
                 and_(
                     UserSession.user_id == user_id,
@@ -175,6 +181,8 @@ class SessionService:
     ) -> List[Dict[str, Any]]:
         """Get all active sessions for user"""
         try:
+            if isinstance(user_id, str):
+                user_id = uuid.UUID(user_id)
             query = select(UserSession).where(
                 and_(
                     UserSession.user_id == user_id,
@@ -214,6 +222,8 @@ class SessionService:
     ) -> bool:
         """Mark device as trusted"""
         try:
+            if isinstance(user_id, str):
+                user_id = uuid.UUID(user_id)
             query = select(UserDevice).where(
                 and_(
                     UserDevice.device_id == device_id,
@@ -250,6 +260,72 @@ class SessionService:
         except Exception as e:
             logger.error(f"Error cleaning up expired sessions: {str(e)}")
             return 0
+
+    @staticmethod
+    async def refresh_session(
+        session: AsyncSession,
+        user_id: str,
+        refresh_token: str,
+        ip_address: str,
+        user_agent: str,
+        device_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Verify refresh token, perform rotation (issue new tokens), and update session"""
+        try:
+            if isinstance(user_id, str):
+                user_id = uuid.UUID(user_id)
+            token_hash = SessionService.hash_token(refresh_token)
+            
+            # Look up active session
+            query = select(UserSession).where(
+                and_(
+                    UserSession.user_id == user_id,
+                    UserSession.refresh_token_hash == token_hash,
+                    UserSession.status == SessionStatus.ACTIVE,
+                    UserSession.expires_at > datetime.now(timezone.utc)
+                )
+            )
+            user_session = (await session.execute(query)).scalar_one_or_none()
+            
+            if not user_session:
+                logger.warning(f"Suspicious session refresh attempt for user {user_id} - token mismatch or already revoked")
+                return None
+                
+            # Session binding validation: verify that the device ID matches the session
+            if user_session.device_id != device_id:
+                logger.warning(f"Session binding validation failed: device_id {device_id} does not match session device {user_session.device_id}")
+                user_session.status = SessionStatus.REVOKED
+                user_session.revoked_at = datetime.now(timezone.utc)
+                user_session.revoke_reason = "device_id_mismatch"
+                await session.flush()
+                return None
+
+            # Generate new tokens
+            new_refresh_token = secrets.token_urlsafe(32)
+            new_access_token = secrets.token_urlsafe(32)
+            expires_delta = timedelta(days=30)
+            
+            # Update the session with new token hashes
+            user_session.refresh_token_hash = SessionService.hash_token(new_refresh_token)
+            user_session.access_token_hash = SessionService.hash_token(new_access_token)
+            user_session.last_activity_at = datetime.now(timezone.utc)
+            user_session.expires_at = datetime.now(timezone.utc) + expires_delta
+            user_session.ip_address = ip_address
+            user_session.user_agent = user_agent
+            
+            await session.flush()
+            
+            logger.info(f"Session {user_session.id} refreshed and tokens rotated for user {user_id}")
+            
+            return {
+                "session_id": str(user_session.id),
+                "refresh_token": new_refresh_token,
+                "access_token": new_access_token,
+                "expires_in": int(expires_delta.total_seconds())
+            }
+        except Exception as e:
+            logger.error(f"Error rotating refresh token: {str(e)}")
+            return None
 
 
 session_service = SessionService()

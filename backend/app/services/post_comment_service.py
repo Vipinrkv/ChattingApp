@@ -6,6 +6,7 @@ from sqlalchemy import desc
 from app.models.post_comment import PostComment
 from app.models.post import Post
 from app.services.notification_service import NotificationService
+from app.services.feed_event_chain_service import FeedEventChainService
 
 
 class PostCommentService:
@@ -16,17 +17,19 @@ class PostCommentService:
         user_id: uuid.UUID,
         content: str,
     ) -> PostComment:
+        post_uuid = uuid.UUID(post_id) if isinstance(post_id, str) else post_id
         comment = PostComment(
-            post_id=uuid.UUID(post_id),
+            post_id=post_uuid,
             user_id=user_id,
             content=content,
         )
         session.add(comment)
         await session.commit()
         await session.refresh(comment)
+
         # Notify post owner (best-effort)
         try:
-            post = await session.get(Post, uuid.UUID(post_id))
+            post = await session.get(Post, post_uuid)
             if post and str(post.user_id) != str(user_id):
                 await NotificationService.create_notification(
                     session,
@@ -38,6 +41,17 @@ class PostCommentService:
                 )
         except Exception:
             pass
+
+        # Log event in FeedEventChain
+        await FeedEventChainService.log_event(
+            session,
+            event_type="comment_created",
+            event_id=comment.id,
+            user_id=user_id,
+            payload={"post_id": str(post_uuid), "content": content},
+        )
+        await session.commit()
+
         return comment
 
     @staticmethod
@@ -46,9 +60,10 @@ class PostCommentService:
         post_id: str,
         limit: int,
     ) -> list[PostComment]:
+        post_uuid = uuid.UUID(post_id) if isinstance(post_id, str) else post_id
         result = await session.execute(
             select(PostComment)
-            .where(PostComment.post_id == uuid.UUID(post_id))
+            .where(PostComment.post_id == post_uuid)
             .order_by(desc(PostComment.created_at))
             .limit(limit)
         )

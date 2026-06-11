@@ -15,6 +15,7 @@ export type VirtualizedListProps<T> = {
   overscan?: number;
   className?: string;
   renderItem: (item: T, index: number) => React.ReactNode;
+  listRef?: React.Ref<any>;
 };
 
 export default function VirtualizedList<T>({
@@ -26,23 +27,25 @@ export default function VirtualizedList<T>({
   overscan = 3,
   className,
   renderItem,
+  listRef,
 }: VirtualizedListProps<T>) {
-  const listRef = useRef<any>(null);
+  const localRef = useRef<any>(null);
+  const activeRef = (listRef as React.MutableRefObject<any>) || localRef;
 
   const Row = ({ index, style }: ListChildComponentProps) =>
     React.createElement('div', { style }, renderItem(items[index], index));
 
   useEffect(() => {
-    if (listRef.current && typeof itemHeight === 'function') {
-      listRef.current.resetAfterIndex(0, true);
+    if (activeRef.current && typeof itemHeight === 'function') {
+      activeRef.current.resetAfterIndex(0, true);
     }
-  }, [items, itemHeight]);
+  }, [items, itemHeight, activeRef]);
 
   if (typeof itemHeight === 'function') {
     return (
       <div className={className}>
         <VariableList
-          ref={listRef}
+          ref={activeRef}
           height={height}
           itemCount={items.length}
           itemSize={(index: number) => itemHeight(items[index], index)}
@@ -59,6 +62,7 @@ export default function VirtualizedList<T>({
   return (
     <div className={className}>
       <FixedList
+        ref={activeRef}
         height={height}
         itemCount={items.length}
         itemSize={itemHeight}

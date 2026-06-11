@@ -1,3 +1,4 @@
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,11 +7,14 @@ from app.core.auth import get_current_user as get_current_user_dep, require_role
 from app.core.errors import BadRequestError, NotFoundError
 from app.database.connection import get_db_session
 from app.models.user import User
+from app.models.group import Group
 from app.schemas.moderation_schema import (
     ReportResponse,
     ReportResolutionRequest,
 )
+from app.schemas.group_schema import GroupResponse
 from app.services.moderation_service import ModerationError, ModerationService
+from app.services.group_service import GroupError, approve_group_verification, reject_group_verification
 
 require_moderator = require_role("admin", "moderator")
 
@@ -81,3 +85,35 @@ async def resolve_report(
         if "not found" in str(exc).lower():
             raise NotFoundError(str(exc), code="moderation_report_not_found") from exc
         raise BadRequestError(str(exc), code="moderation_resolution_invalid") from exc
+
+
+@router.post("/groups/{group_id}/verify/approve", response_model=GroupResponse)
+async def verify_approve(
+    group_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+) -> GroupResponse:
+    try:
+        return await approve_group_verification(session, group_id)
+    except GroupError as exc:
+        raise BadRequestError(str(exc), code="group_verification_approval_invalid") from exc
+
+
+@router.post("/groups/{group_id}/verify/reject", response_model=GroupResponse)
+async def verify_reject(
+    group_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+) -> GroupResponse:
+    try:
+        return await reject_group_verification(session, group_id)
+    except GroupError as exc:
+        raise BadRequestError(str(exc), code="group_verification_rejection_invalid") from exc
+
+
+@router.get("/groups/pending", response_model=list[GroupResponse])
+async def list_pending_verification_groups(
+    session: AsyncSession = Depends(get_db_session),
+) -> list[GroupResponse]:
+    result = await session.execute(
+        select(Group).where(Group.verification_status == "pending")
+    )
+    return list(result.scalars().all())

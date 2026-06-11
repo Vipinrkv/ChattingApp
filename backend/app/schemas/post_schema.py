@@ -14,6 +14,7 @@ class PostVisibility(str, Enum):
 class PostCreate(BaseModel):
     content: str
     visibility: PostVisibility = PostVisibility.PUBLIC
+    quoted_post_id: Optional[str] = None
 
 
 class PostUpdate(BaseModel):
@@ -26,6 +27,8 @@ class PostResponse(BaseModel):
     user_id: str
     content: str
     visibility: PostVisibility
+    quoted_post_id: Optional[str] = None
+    quoted_post: Optional["PostResponse"] = None
     created_at: datetime
 
     class Config:
@@ -45,3 +48,7 @@ class GroupPostResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Rebuild to resolve self-reference
+PostResponse.model_rebuild()

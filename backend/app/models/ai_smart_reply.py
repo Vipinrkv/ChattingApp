@@ -27,13 +27,11 @@ class AISmartReply(Base):
         UUID(as_uuid=True),
         ForeignKey("messages.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     reply_text: Mapped[str] = mapped_column(String(4096), nullable=False)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
@@ -42,5 +40,4 @@ class AISmartReply(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-        index=True,
     )

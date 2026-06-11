@@ -39,6 +39,9 @@ class AIModerationResult(Base):
 
     # Analysis details
     detected_issues = Column(JSON, nullable=False, default=dict)  # {"spam_patterns": [...], "toxic_phrases": [...]}
+
+
+
     analysis_metadata = Column(JSON, nullable=False, default=dict)
 
     # Timestamps
@@ -47,7 +50,7 @@ class AIModerationResult(Base):
 
     __table_args__ = (
         Index("idx_content_type_risk", "content_type", "overall_risk_level"),
-        Index("idx_created_at", "created_at"),
+        Index("idx_ai_moderation_results_created_at", "created_at"),
         Index("idx_should_auto_moderate", "should_auto_moderate"),
     )
 
@@ -79,7 +82,7 @@ class AIModelTrainingData(Base):
 
     __table_args__ = (
         Index("idx_human_label", "human_label"),
-        Index("idx_created_at", "created_at"),
+        Index("idx_ai_model_training_data_created_at", "created_at"),
     )
 
 
@@ -109,5 +112,5 @@ class CommunityModerationVote(Base):
     __table_args__ = (
         Index("idx_report_user", "report_id", "user_id"),
         Index("idx_vote_type", "vote_type"),
-        Index("idx_created_at", "created_at"),
+        Index("idx_community_moderation_votes_created_at", "created_at"),
     )

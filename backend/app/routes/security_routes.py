@@ -22,6 +22,7 @@ from app.schemas.security import (
     SessionResponse,
     SessionCreateRequest,
     SessionCreateResponse,
+    SessionRefreshRequest,
     SessionRevokeRequest,
     SessionRevokeAllRequest,
     DeviceTrustRequest,
@@ -189,6 +190,31 @@ async def create_session(
         metadata={"device_id": device_id},
     )
 
+    return result
+
+
+@router.post("/sessions/refresh", response_model=SessionCreateResponse)
+async def refresh_session(
+    request: Request,
+    payload: SessionRefreshRequest,
+    current_user: User = Depends(get_current_user_dep),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Refresh active session and rotate tokens."""
+    ip_address = _get_request_ip(request)
+    result = await session_service.refresh_session(
+        session,
+        str(current_user.id),
+        payload.refresh_token,
+        ip_address,
+        request.headers.get("user-agent", ""),
+        payload.device_id,
+    )
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token or device mismatch",
+        )
     return result
 
 

@@ -26,10 +26,10 @@ class LoginHistory(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=True)
     
     # Login attempt info
-    status = Column(SQLEnum(LoginStatus), nullable=False, index=True)
+    status = Column(SQLEnum(LoginStatus), nullable=False)
     method = Column(String, nullable=False)  # 'email', 'phone', 'oauth', etc.
     identifier = Column(String, nullable=False)  # email or phone used
     
@@ -41,7 +41,7 @@ class LoginHistory(Base):
     os = Column(String, nullable=True)
     
     # Network info
-    ip_address = Column(String, nullable=False, index=True)
+    ip_address = Column(String, nullable=False)
     country = Column(String, nullable=True)
     city = Column(String, nullable=True)
     latitude = Column(String, nullable=True)
@@ -56,7 +56,7 @@ class LoginHistory(Base):
     failure_reason = Column(String, nullable=True)
     mfa_method_used = Column(String, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class SuspiciousActivity(Base):
@@ -69,14 +69,14 @@ class SuspiciousActivity(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=True)
     
     # Activity type
     activity_type = Column(String, nullable=False)  # 'brute_force', 'unusual_login', etc.
     severity = Column(String, nullable=False)  # 'low', 'medium', 'high', 'critical'
     
     # Network info
-    ip_address = Column(String, nullable=False, index=True)
+    ip_address = Column(String, nullable=False)
     country = Column(String, nullable=True)
     
     # Details
@@ -87,5 +87,5 @@ class SuspiciousActivity(Base):
     action_taken = Column(String, nullable=True)  # 'none', 'block', 'challenge', etc.
     is_resolved = Column(Boolean, default=False)
     
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)

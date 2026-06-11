@@ -15,6 +15,7 @@ import { ChatBackupExport } from '../components/ChatBackupExport';
 import ReconnectBanner from '../components/ReconnectBanner';
 import { displayMessageContent, isEncryptedToken } from '../lib/messageContent';
 import { Link } from 'react-router-dom';
+import { Dropdown, type DropdownItem } from '../ui';
 
 interface Peer {
   id: string;
@@ -48,6 +49,10 @@ interface MessageData {
   is_pinned?: boolean;
   edited_at?: string | null;
 }
+
+type ChatListItem =
+  | { type: 'message'; data: MessageData; isConsecutive: boolean }
+  | { type: 'date-separator'; dateString: string; id: string };
 
 function Chat() {
   const { user } = useAuth();
@@ -94,6 +99,32 @@ function Chat() {
   const [listHeight, setListHeight] = useState(520);
   const renderCount = useRenderCount('ChatThread');
 
+  // Modern chat lists state
+  const [pinnedPeerIds, setPinnedPeerIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('chattingapp.pinnedPeers') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [archivedPeerIds, setArchivedPeerIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('chattingapp.archivedPeers') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [showArchived, setShowArchived] = useState(false);
+  const [chatListSearch, setChatListSearch] = useState('');
+  const [chatListFilter, setChatListFilter] = useState<'all' | 'friends'>('all');
+
+  // Floating bottom navigation
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+
+  // Refs
+  const threadMessagesRef = useRef<HTMLDivElement | null>(null);
+  const virtualListRef = useRef<any>(null);
+
   useEffect(() => {
     localStorage.setItem('chattingapp.friendNicknames', JSON.stringify(nicknames));
   }, [nicknames]);
@@ -101,6 +132,26 @@ function Chat() {
   useEffect(() => {
     localStorage.setItem('chattingapp.friendRequestDrafts', JSON.stringify(requestStatusByPeerId));
   }, [requestStatusByPeerId]);
+
+  useEffect(() => {
+    localStorage.setItem('chattingapp.pinnedPeers', JSON.stringify(pinnedPeerIds));
+  }, [pinnedPeerIds]);
+
+  useEffect(() => {
+    localStorage.setItem('chattingapp.archivedPeers', JSON.stringify(archivedPeerIds));
+  }, [archivedPeerIds]);
+
+  const togglePinPeer = (peerId: string) => {
+    setPinnedPeerIds((prev) =>
+      prev.includes(peerId) ? prev.filter((id) => id !== peerId) : [...prev, peerId]
+    );
+  };
+
+  const toggleArchivePeer = (peerId: string) => {
+    setArchivedPeerIds((prev) =>
+      prev.includes(peerId) ? prev.filter((id) => id !== peerId) : [...prev, peerId]
+    );
+  };
 
   useLayoutEffect(() => {
     const element = listContainerRef.current;
@@ -193,6 +244,33 @@ function Chat() {
       });
   }, [selectedPeer]);
 
+  const friendIds = useMemo(() => new Set(friends.map((friend) => friend.id)), [friends]);
+
+  const processedPeers = useMemo(() => {
+    let result = peers.filter((peer) => {
+      const label = nicknames[peer.id] || peer.username;
+      return label.toLowerCase().includes(chatListSearch.toLowerCase());
+    });
+
+    if (chatListFilter === 'friends') {
+      result = result.filter((peer) => friendIds.has(peer.id));
+    }
+
+    if (showArchived) {
+      result = result.filter((peer) => archivedPeerIds.includes(peer.id));
+    } else {
+      result = result.filter((peer) => !archivedPeerIds.includes(peer.id));
+    }
+
+    return [...result].sort((a, b) => {
+      const aPinned = pinnedPeerIds.includes(a.id);
+      const bPinned = pinnedPeerIds.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return 0;
+    });
+  }, [peers, chatListSearch, chatListFilter, showArchived, archivedPeerIds, pinnedPeerIds, nicknames, friendIds]);
+
   const chatMessages = useMemo(
     () => messages.filter((message) => message.type === 'message'),
     [messages],
@@ -252,7 +330,69 @@ function Chat() {
       .map((message) => editedMessages[message.id] ?? message)
     : combinedMessages;
 
-  const friendIds = useMemo(() => new Set(friends.map((friend) => friend.id)), [friends]);
+  const formatDateLabel = (timestamp: string) => {
+    const d = new Date(timestamp);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return 'Today';
+    }
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+    return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const renderableChatItems = useMemo(() => {
+    const items: ChatListItem[] = [];
+    let prevMsg: MessageData | undefined = undefined;
+
+    displayedMessages.forEach((msg, idx) => {
+      const msgDate = new Date(msg.timestamp);
+      const prevDate = prevMsg ? new Date(prevMsg.timestamp) : null;
+
+      if (!prevDate || msgDate.toDateString() !== prevDate.toDateString()) {
+        const label = formatDateLabel(msg.timestamp);
+        items.push({
+          type: 'date-separator',
+          dateString: label,
+          id: `sep-${msg.timestamp}-${idx}`
+        });
+      }
+
+      const consecutive = prevMsg && prevMsg.sender_id === msg.sender_id &&
+        (msgDate.getTime() - prevDate!.getTime() < 5 * 60 * 1000);
+
+      items.push({
+        type: 'message',
+        data: msg,
+        isConsecutive: !!consecutive
+      });
+
+      prevMsg = msg;
+    });
+
+    return items;
+  }, [displayedMessages]);
+
+  const handleScrollToBottom = (behavior: 'auto' | 'smooth' = 'smooth') => {
+    if (threadMessagesRef.current) {
+      threadMessagesRef.current.scrollTo({
+        top: threadMessagesRef.current.scrollHeight,
+        behavior,
+      });
+    }
+    if (virtualListRef.current) {
+      virtualListRef.current.scrollToItem(renderableChatItems.length - 1, 'end');
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => handleScrollToBottom('auto'), 50);
+    return () => clearTimeout(timer);
+  }, [renderableChatItems.length, selectedPeer]);
+
   const canChatWithSelectedPeer = Boolean(selectedPeer && friendIds.has(selectedPeer.id));
   const selectedPeerLabel = selectedPeer ? nicknames[selectedPeer.id] || selectedPeer.username : 'Select a chat';
 
@@ -529,7 +669,11 @@ function Chat() {
     }
   };
 
-  const estimateChatMessageHeight = (message: MessageData) => {
+  const estimateChatMessageHeight = (item: any) => {
+    if (item.type === 'date-separator') {
+      return 52;
+    }
+    const message = item.data;
     let height = 110;
     const contentLength = message.content?.length ?? 0;
 
@@ -571,10 +715,13 @@ function Chat() {
       ? combinedMessages.filter((message) => message.sender_id === peer.id && !message.is_seen).length
       : 0;
     const isFriend = friendIds.has(peer.id);
+    const isPinned = pinnedPeerIds.includes(peer.id);
+    const isArchived = archivedPeerIds.includes(peer.id);
+
     return (
       <div
         key={peer.id}
-        className={`conversation-card ${peer.id === selectedPeer?.id ? 'active' : ''} ${!isFriend ? 'locked' : ''}`}
+        className={`conversation-card ${peer.id === selectedPeer?.id ? 'active' : ''} ${!isFriend ? 'locked' : ''} ${isPinned ? 'pinned' : ''}`}
         onClick={() => {
           setSelectedPeer(peer);
           setIsThreadOpen(true);
@@ -593,30 +740,127 @@ function Chat() {
           <span className={`presence-dot ${isFriend ? 'online' : ''}`} />
         </div>
         <div className="conversation-copy">
-          <p className="conversation-title">{nicknames[peer.id] || peer.username}</p>
+          <p className="conversation-title">
+            {isPinned && <span className="pin-icon" aria-label="Pinned chat">📌 </span>}
+            {nicknames[peer.id] || peer.username}
+          </p>
           <p className="conversation-meta">{lastMessage}</p>
           {nicknames[peer.id] ? <small>Real profile: {peer.username}</small> : null}
         </div>
         <div className="conversation-side">
           {unreadCount > 0 ? <span className="unread-badge">{unreadCount}</span> : null}
-          <span>{isFriend ? 'Open' : 'Locked'}</span>
+          <div className="conversation-actions-row">
+            <button
+              type="button"
+              className="peer-action-btn"
+              title={isPinned ? 'Unpin chat' : 'Pin chat'}
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePinPeer(peer.id);
+              }}
+            >
+              📌
+            </button>
+            <button
+              type="button"
+              className="peer-action-btn"
+              title={isArchived ? 'Unarchive chat' : 'Archive chat'}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleArchivePeer(peer.id);
+              }}
+            >
+              📥
+            </button>
+          </div>
         </div>
       </div>
     );
   };
 
-  const renderMessageRow = (message: MessageData, index: number) => {
+  const renderMessageRow = (item: any, index: number) => {
+    if (item.type === 'date-separator') {
+      return (
+        <div key={item.id} className="chat-date-separator" role="separator" aria-label={item.dateString}>
+          <span>{item.dateString}</span>
+        </div>
+      );
+    }
+
+    const message = item.data;
+    const isConsecutive = item.isConsecutive;
     const isOutgoing = message.sender_id !== selectedPeer?.id;
     const replyPreview = getReplyPreview(message);
     const reactions = Object.entries(message.reactions ?? {}).filter(([, users]) => users.length > 0);
 
+    const messageActionItems: DropdownItem[] = [
+      {
+        id: 'reply',
+        label: 'Reply',
+        onSelect: () => setReplyTarget(message)
+      },
+      {
+        id: 'translate',
+        label: 'Translate',
+        onSelect: () => toggleMessageTranslation(message.id)
+      },
+      {
+        id: 'smart-replies',
+        label: 'Smart replies',
+        onSelect: () => toggleSmartReplies(message.id)
+      },
+      {
+        id: 'like',
+        label: 'Like',
+        onSelect: () => handleToggleReaction(message, '👍')
+      },
+      {
+        id: 'pin',
+        label: message.is_pinned ? 'Unpin' : 'Pin',
+        onSelect: () => handleTogglePin(message)
+      },
+      {
+        id: 'forward',
+        label: 'Forward',
+        onSelect: () => handleForwardMessage(message)
+      }
+    ];
+
+    if (isOutgoing) {
+      messageActionItems.push(
+        {
+          id: 'edit',
+          label: 'Edit',
+          onSelect: () => startEditingMessage(message)
+        },
+        {
+          id: 'delete',
+          label: 'Delete',
+          onSelect: () => handleDeleteMessage(message)
+        }
+      );
+    }
+
     return (
       <div
         key={message.id ?? `${message.timestamp}-${index}`}
-        className={`message-row ${isOutgoing ? 'outgoing' : 'incoming'}`}
+        className={`message-row ${isOutgoing ? 'outgoing' : 'incoming'} ${isConsecutive ? 'consecutive' : ''}`}
         role="article"
         aria-label={`Message from ${isOutgoing ? 'you' : selectedPeer?.username ?? 'peer'}`}
       >
+        <div className="message-quick-reactions">
+          {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => handleToggleReaction(message, emoji)}
+              className="quick-reaction-btn"
+              title={`React with ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
         {message.is_pinned && <span className="pinned-label">Pinned</span>}
         {replyPreview && <div className="reply-preview">{replyPreview}</div>}
 
@@ -685,27 +929,14 @@ function Chat() {
 
         <div className="message-meta">
           <small>{formatTimestamp(message.timestamp)}{message.edited_at ? ' · edited' : ''}</small>
-          <span className="message-actions">
+          <div className="message-actions-container">
             <MessageBookmark messageId={message.id} />
-            <button type="button" className="message-action" onClick={() => toggleMessageTranslation(message.id)}>
-              Translate
-            </button>
-            <button type="button" className="message-action" onClick={() => toggleSmartReplies(message.id)}>
-              Smart replies
-            </button>
-            <button type="button" className="message-action" onClick={() => setReplyTarget(message)}>Reply</button>
-            <button type="button" className="message-action" onClick={() => handleToggleReaction(message, '👍')}>Like</button>
-            <button type="button" className="message-action" onClick={() => handleTogglePin(message)}>
-              {message.is_pinned ? 'Unpin' : 'Pin'}
-            </button>
-            <button type="button" className="message-action" onClick={() => handleForwardMessage(message)}>Forward</button>
-            {isOutgoing ? (
-              <>
-                <button type="button" className="message-action" onClick={() => startEditingMessage(message)}>Edit</button>
-                <button type="button" className="message-action" onClick={() => handleDeleteMessage(message)}>Delete</button>
-              </>
-            ) : null}
-          </span>
+            <Dropdown
+              trigger={<span className="message-actions-trigger" role="button" aria-label="Message actions">⋮</span>}
+              items={messageActionItems}
+              align="end"
+            />
+          </div>
         </div>
         {activeTranslationMessageId === message.id ? (
           <div className="message-feature-panel">
@@ -740,13 +971,51 @@ function Chat() {
             </div>
           </div>
 
+          <div className="chat-list-search-bar">
+            <input
+              type="text"
+              placeholder="Search chats..."
+              value={chatListSearch}
+              onChange={(e) => setChatListSearch(e.target.value)}
+              className="chat-search-input"
+              aria-label="Search conversations"
+            />
+            <div className="chat-list-filters">
+              <button
+                type="button"
+                className={`filter-tab-btn ${chatListFilter === 'all' && !showArchived ? 'active' : ''}`}
+                onClick={() => { setChatListFilter('all'); setShowArchived(false); }}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`filter-tab-btn ${chatListFilter === 'friends' && !showArchived ? 'active' : ''}`}
+                onClick={() => { setChatListFilter('friends'); setShowArchived(false); }}
+              >
+                Friends
+              </button>
+              <button
+                type="button"
+                className={`filter-tab-btn ${showArchived ? 'active' : ''}`}
+                onClick={() => setShowArchived(true)}
+              >
+                Archived
+              </button>
+            </div>
+          </div>
+
           <div className="chat-list-content">
             {loadingPeers ? (
               <div className="conversation-card loading" aria-live="polite">Loading chats...</div>
-            ) : peers.length > 0 ? (
-              peers.map(renderPeer)
+            ) : processedPeers.length > 0 ? (
+              processedPeers.map(renderPeer)
             ) : (
-              <div className="conversation-card empty">No available chat peers yet.</div>
+              <div className="conversation-card empty">
+                {chatListSearch.trim() || chatListFilter !== 'all' || showArchived
+                  ? 'No conversations found matching filters.'
+                  : 'No available chat peers yet.'}
+              </div>
             )}
           </div>
 
@@ -757,7 +1026,7 @@ function Chat() {
           <div className="thread-header">
             <div>
               <button className="ghost-button chat-back-button" type="button" onClick={() => setIsThreadOpen(false)}>
-                Back to chats
+                ← Back to chats
               </button>
               <p className="hero-label">Conversation</p>
               <h3>{selectedPeerLabel}</h3>
@@ -777,7 +1046,13 @@ function Chat() {
               <span className={`pill ${peerStatus === 'online' ? 'success' : 'soft'}`}>
                 {selectedPeer ? `${peerStatus === 'online' ? 'Online' : 'Offline'}` : 'No peer selected'}
               </span>
-              {isPeerTyping ? <span className="pill accent">Typing...</span> : null}
+              {isPeerTyping ? (
+                <div className="typing-indicator-dots" aria-label="Peer is typing">
+                  <span className="dot" />
+                  <span className="dot" />
+                  <span className="dot" />
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -835,7 +1110,19 @@ function Chat() {
             ) : null}
           </div>
 
-          <div className="thread-messages" role="log" aria-live="polite" aria-atomic="false">
+          <div
+            ref={threadMessagesRef}
+            onScroll={(e) => {
+              const target = e.currentTarget;
+              const isScrollUp = target.scrollHeight - target.scrollTop - target.clientHeight > 300;
+              setShowScrollBottom(isScrollUp);
+            }}
+            className="thread-messages"
+            role="log"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            <div className="chat-wallpaper" aria-hidden="true" />
             {hasMoreHistory && !searchTerm.trim() && messageHistory.length > 0 ? (
               <button
                 type="button"
@@ -855,24 +1142,25 @@ function Chat() {
               <div className="message-row incoming">
                 <p>Loading conversation history...</p>
               </div>
-            ) : displayedMessages.length === 0 ? (
+            ) : renderableChatItems.length === 0 ? (
               <div className="message-row incoming">
                 <p>{searchTerm.trim() ? 'No messages match your search.' : 'Start a new conversation by sending the first message.'}</p>
               </div>
-            ) : displayedMessages.length > 80 ? (
+            ) : renderableChatItems.length > 80 ? (
               <div ref={listContainerRef} className="virtualized-thread-list">
                 <VirtualizedList
-                  items={displayedMessages}
+                  items={renderableChatItems}
                   itemHeight={estimateChatMessageHeight}
                   estimatedItemHeight={140}
                   height={listHeight}
                   overscan={6}
+                  listRef={virtualListRef}
                   className="virtualized-message-list"
-                  renderItem={(message, index) => renderMessageRow(message, index)}
+                  renderItem={(item, index) => renderMessageRow(item, index)}
                 />
               </div>
             ) : (
-              displayedMessages.map((message, index) => renderMessageRow(message, index))
+              renderableChatItems.map((item, index) => renderMessageRow(item, index))
             )}
 
             {error ? (
@@ -881,6 +1169,17 @@ function Chat() {
               </div>
             ) : null}
           </div>
+
+          {showScrollBottom && (
+            <button
+              type="button"
+              className="scroll-bottom-btn"
+              onClick={() => handleScrollToBottom()}
+              aria-label="Scroll to bottom"
+            >
+              ↓
+            </button>
+          )}
 
           <form className="message-input floating-input-bar glass-panel" onSubmit={handleSend} aria-label="Send message form">
             {replyTarget ? (

@@ -189,3 +189,14 @@ class GroupAnalyticsResponse(BaseModel):
     discovery_score: float
     engagement_rate: float
     onboarding_completion_estimate: float
+
+
+class GroupMemberRoleUpdateRequest(BaseModel):
+    role: str = Field(min_length=2, max_length=20)
+
+    @validator("role")
+    def validate_role(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"owner", "admin", "moderator", "member"}:
+            raise ValueError("Role must be owner, admin, moderator, or member")
+        return normalized

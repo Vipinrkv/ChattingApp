@@ -97,10 +97,34 @@ class FirebaseService:
             return {}
 
     @staticmethod
-    def verify_token(token: str) -> Optional[Dict[str, Any]]:
-        """Verify Firebase ID token"""
+    def verify_supabase_token(token: str) -> Optional[Dict[str, Any]]:
+        """Verify Supabase JWT token as a fallback"""
+        if not settings.SUPABASE_JWT_SECRET:
+            return None
         try:
-            return auth.verify_id_token(token, check_revoked=False)
+            from jose import jwt as jose_jwt
+            payload = jose_jwt.decode(
+                token,
+                settings.SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False}
+            )
+            return {
+                "uid": payload.get("sub"),
+                "email": payload.get("email"),
+                "phone_number": payload.get("phone"),
+                "display_name": payload.get("user_metadata", {}).get("full_name"),
+            }
+        except Exception as exc:
+            logger.warning("Supabase fallback token verification failed: %s", exc)
+            return None
+
+    @staticmethod
+    def verify_token(token: str) -> Optional[Dict[str, Any]]:
+        """Verify Firebase ID token with Supabase fallback"""
+        try:
+            if FirebaseService._initialized:
+                return auth.verify_id_token(token, check_revoked=False)
         except Exception as exc:
             if "Token used too early" in str(exc):
                 time.sleep(1.2)
@@ -110,15 +134,12 @@ class FirebaseService:
                     exc = retry_exc
 
             claims = FirebaseService._decode_unverified_claims(token)
-            logger.error(
-                "Firebase token verification failed: %s; expected_project=%s; token_aud=%s; token_iss=%s; token_exp=%s",
-                exc,
-                settings.FIREBASE_PROJECT_ID or None,
-                claims.get("aud"),
-                claims.get("iss"),
-                claims.get("exp"),
+            logger.warning(
+                "Firebase token verification failed: %s; trying Supabase fallback",
+                exc
             )
-            return None
+        
+        return FirebaseService.verify_supabase_token(token)
 
     @staticmethod
     def get_user(uid: str) -> Optional[Dict[str, Any]]:

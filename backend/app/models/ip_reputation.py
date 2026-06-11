@@ -17,10 +17,10 @@ class IPReputation(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    ip_address = Column(String, unique=True, nullable=False, index=True)
+    ip_address = Column(String, unique=True, nullable=False)
     
     # Reputation metrics
-    reputation_score = Column(Float, default=0.0, index=True)  # 0-1.0, higher = better
+    reputation_score = Column(Float, default=0.0)  # 0-1.0, higher = better
     abuse_score = Column(Float, default=0.0)  # 0-1.0, higher = worse
     
     # Flags
@@ -63,7 +63,7 @@ class RateLimitEntry(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
     # Rate limit key (ip:endpoint, user:endpoint, etc.)
-    limit_key = Column(String, nullable=False, index=True)
+    limit_key = Column(String, nullable=False)
     
     # Count and window
     attempt_count = Column(Integer, default=1)
@@ -71,4 +71,4 @@ class RateLimitEntry(Base):
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
