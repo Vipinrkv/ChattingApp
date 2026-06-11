@@ -20,6 +20,27 @@ This checklist details the outstanding tasks for production release, sorted by p
 - **Dependencies**: None
 - **Acceptance Criteria**: Running the clean task successfully identifies and removes deleted message media files from storage without affecting active media.
 
+### 3. Redesign Double-Header Chat Layout (CHAT-01)
+- **Description**: Eliminate the oversized, stacked page-level header ("Chat / Messaging") and contact-level header. Integrate them cleanly into the respective panels.
+- **Priority**: P0 (Critical)
+- **Estimated Effort**: 1 day
+- **Dependencies**: None
+- **Acceptance Criteria**: Only one header is visible at a time. The Chat list sidebar shows inbox search/filters, and the Chat thread displays contact info.
+
+### 4. Implement Messaging Welcome Empty State (CHAT-02)
+- **Description**: Design a modern, professional welcome screen and onboarding instructions when no conversation is selected, rather than auto-selecting the first peer.
+- **Priority**: P0 (Critical)
+- **Estimated Effort**: 1 day
+- **Dependencies**: None
+- **Acceptance Criteria**: Shows illustrations, shortcuts, and quick links rather than a blank column or locked user state.
+
+### 5. Create Collapsible Right Contact Details Panel (CHAT-03)
+- **Description**: Move the floating shared media gallery and contact info details to a dedicated collapsible right-hand side panel.
+- **Priority**: P0 (Critical)
+- **Estimated Effort**: 1 day
+- **Dependencies**: None
+- **Acceptance Criteria**: Clicking the "Info" icon in the chat header toggles the right panel, adjusting the center column size without clipping.
+
 ---
 
 ## 🟡 P1 - High Priority Operational Tasks
@@ -31,12 +52,26 @@ This checklist details the outstanding tasks for production release, sorted by p
 - **Dependencies**: None
 - **Acceptance Criteria**: Session revocation or token rotation automatically unregisters the push notification token bound to that device.
 
-### 2. centralize Admin Health and Moderation API Endpoints
+### 2. Centralize Admin Health and Moderation API Endpoints
 - **Description**: Expose the backend admin system health query APIs (`GET /api/v1/admin/health`) returning PostgreSQL connection pools, Redis metrics, CPU, disk metrics, and active socket counts.
 - **Priority**: P1 (High)
 - **Estimated Effort**: 3 days
 - **Dependencies**: None
 - **Acceptance Criteria**: Admin health endpoints return accurate system stats and reject requests from non-admin accounts with an `HTTP_403_FORBIDDEN`.
+
+### 3. Fix Horizontal Mobile Chat List Carousel (CHAT-04)
+- **Description**: Reorganize the horizontal scroll carousel of conversation cards on mobile viewports into a standard vertical scrolling list.
+- **Priority**: P1 (High)
+- **Estimated Effort**: 1 day
+- **Dependencies**: None
+- **Acceptance Criteria**: No horizontal scroll on mobile; conversation list scrolls vertically and fits within the thumb zone.
+
+### 4. Implement Chat Composer Media Staging Area (CHAT-05)
+- **Description**: Redesign input to support horizontal staging previews of attached media before upload, and collapse caption/message inputs.
+- **Priority**: P1 (High)
+- **Estimated Effort**: 1 day
+- **Dependencies**: None
+- **Acceptance Criteria**: Selected attachments show preview thumbnails and description caption fields before sending.
 
 ---
 
@@ -56,6 +91,20 @@ This checklist details the outstanding tasks for production release, sorted by p
 - **Dependencies**: Centralized Admin Health APIs
 - **Acceptance Criteria**: Grafana dashboard imports successfully and visualizes Prometheus telemetry.
 
+### 3. Mapped Peer-ID Chat Draft Persistence (CHAT-06)
+- **Description**: Add support to cache composer text drafts in memory mapped by selected peer ID.
+- **Priority**: P2 (Medium)
+- **Estimated Effort**: 0.5 days
+- **Dependencies**: None
+- **Acceptance Criteria**: Switching chats and returning restores the exact draft content in progress.
+
+### 4. Expand Mobile Touch Target Sizes (CHAT-07)
+- **Description**: Increase clickable interaction zones for icons (emoji picker, attachment clips, voice recorder) to a minimum of 44px.
+- **Priority**: P2 (Medium)
+- **Estimated Effort**: 0.5 days
+- **Dependencies**: None
+- **Acceptance Criteria**: Prevents fat-finger errors on mobile devices.
+
 ---
 
 ## 🟢 P3 - Low Priority Polish
@@ -67,7 +116,15 @@ This checklist details the outstanding tasks for production release, sorted by p
 - **Dependencies**: None
 - **Acceptance Criteria**: The bottom navigation is positioned correctly above browser navigation controls on all mobile viewports.
 
+### 2. Redesign Bubble Tails & Message Grouping (CHAT-08)
+- **Description**: Add modern bubble tail indicators and style incoming vs. outgoing bubbles with distinct HSL gradients.
+- **Priority**: P3 (Low)
+- **Estimated Effort**: 0.5 days
+- **Dependencies**: None
+- **Acceptance Criteria**: Clear visual delineation of message origin and flow continuity.
+
 ---
+
 
 ## 🟢 Completed Tasks (2026-06-11)
 

@@ -1,39 +1,40 @@
 # Chat Experience UX Improvement Report
 
-This report outlines the design reference, user experience enhancements, and implementation details for the modernized direct messaging interface.
+This document details the user experience enhancements, features, and interface patterns introduced in the redesigned Chat experience.
 
 ---
 
-## 1. UX Design & Inspiration
-We reviewed industry-leading chat apps to adapt their strongest patterns for our direct chatting interface:
-*   **Telegram & Discord**: Pinned chats, search filtering, and distinct role badges.
-*   **WhatsApp & Messenger**: Sticky date separators, scroll-to-bottom indicators, and message grouping for consecutive bubbles.
-*   **Instagram DMs**: Clean, minimal borders, glassmorphic thread cards, and popover actions dropdown to keep message bubbles neat.
+## 1. Resolved Layout & Hierarchy Enhancements
+
+### Single Unified Header Pattern
+*   Removed the page-level `panel-header` ("Chat / Messaging") and integrated the navigation into the column headers:
+    *   **Chat List Header**: Contains search, filters, and a shortcut to find/add friends.
+    *   **Conversation Window Header**: Houses the active contact’s avatar, verified status, name, presence details, call buttons, search triggers, and right-panel toggle buttons.
+    *   **Right Side Panel Header**: Labeled "Contact Info" with a close button.
+*   This removes vertical whitespace blockages and increases the message viewing viewport height.
+
+### Three-Column Workspace
+*   **Column 1 (Left, 320px - 360px)**: Dedicated to conversation list discovery, pinned chats, search queries, and filters.
+*   **Column 2 (Center, Flex)**: Dedicated to active message feed history, inline media, replies, reactions, and the composer bar.
+*   **Column 3 (Right, 300px - 340px, Collapsible)**: Contains contact details, local nickname editor, verification, mutual friends counters, and the `SharedMediaGallery`.
+*   Side panels can be collapsed using quick-toggle controls, enabling full focus on the conversation thread.
 
 ---
 
-## 2. Conversation List Modernization
-*   **Search & Filtering**: Added a quick search text field and filters (All, Friends, Archived) to the inbox panel.
-*   **Pinned/Archived Conversations**: Users can pin important chats (keeping them at the top of the list) or archive inactive conversations. Pinned and archived configurations are saved locally via `localStorage`.
-*   **Unread & Status Indicators**: High-contrast unread count badges, active green dot presence indicators, and inline "Typing..." animations.
+## 2. Interactive Features & Messaging Polish
 
----
+### Hover Quick-Reactions Bar
+*   Hovering over any message bubble reveals a floating quick-reaction bar (similar to Instagram and WhatsApp) with common emojis (`👍`, `❤️`, `😂`, `😮`, `😢`, `🙏`).
+*   This avoids opening the context menu for basic reactions, reducing clicks.
 
-## 3. Chat Window Enhancements
-*   **Sticky Date Separators**: Implemented sticky day indicators (e.g. "Today", "Yesterday", "Monday, June 8") that float at the top of the message area while scrolling.
-*   **Consecutive Message Grouping**: Message threads detect consecutive messages sent by the same user within 5 minutes. Consecutive messages hide the sender avatar and timestamp headers, merging bubbles closer together with adjusted margins and border-radii.
-*   **Message Dropdown Actions**: All quick actions (Reply, Translate, Smart replies, Like/Reaction, Pin, Forward, Edit, Delete) are grouped into a neat popover dropdown menu (triggered by `⋮`). This removes clutter from the screen.
-*   **Floating Navigation**: Added a floating "Scroll to Bottom" button (`↓`) that appears when the user scrolls upwards in the conversation history, allowing instant snaps back to the newest message.
+### Rich Composer Staging & Preview
+*   **Media Staging Preview**: When attaching images, videos, or files, they are rendered in a horizontal staging card above the input field with a remove button.
+*   **Combined Message + Caption Input**: Staging a file opens a caption input next to the message field rather than keeping them permanently stacked, saving screen height.
+*   **Dynamic Send Triggers**: The send button transforms from a voice recording trigger to a message dispatch arrow based on text content.
 
----
+### Multi-User Draft Persistence
+*   Unsent messages in the composer input are saved in a local memory cache mapped to each peer's ID. Switching between chats restores the respective unsent text draft automatically.
 
-## 4. Chat Composer Upgrades
-*   **Attachment Preview**: Attachment flow utilizes standard system triggers with inline indicators for audio, video, image, and document uploads.
-*   **Multi-Line Stack**: Message text inputs and optional caption fields are organized in a clean stack inside the glassmorphic footer, saving vertical space.
-*   **Voice Recorder Integration**: Dedicated voice recorder triggers allow immediate creation and dispatch of audio recordings (`VoiceMessage`).
-
----
-
-## 5. Real-Time Resiliency
-*   **Graceful Reconnecting**: A custom status bar banner (`ReconnectBanner.tsx`) displays alerts when the WebSocket connection is lost, offering automated reconnection attempts without freezing the UI.
-*   **Aria Announcement**: Live regions announce socket state transitions (`Connected`, `Reconnecting`, `Offline`) for assistive tools.
+### Sticky Date Grouping & Consecutive Bundles
+*   Date separators float at the top of the message pane while scrolling, showing clear time segments (e.g., "Today", "Yesterday", "June 11, 2026").
+*   Consecutive bubbles sent by the same user within 5 minutes hide user avatars and margins, merging visual borders to resemble modern messaging apps.

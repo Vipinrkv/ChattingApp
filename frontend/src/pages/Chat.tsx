@@ -125,6 +125,26 @@ function Chat() {
   const threadMessagesRef = useRef<HTMLDivElement | null>(null);
   const virtualListRef = useRef<any>(null);
 
+  // Redesign & UX States
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [stagedFile, setStagedFile] = useState<File | null>(null);
+  const [draftsByPeerId, setDraftsByPeerId] = useState<Record<string, string>>({});
+
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  const selectPeer = (peer: Peer | null) => {
+    if (selectedPeer) {
+      setDraftsByPeerId((prev) => ({ ...prev, [selectedPeer.id]: draftRef.current }));
+    }
+    setSelectedPeer(peer);
+    setDraft(peer ? (draftsByPeerId[peer.id] ?? '') : '');
+    setStagedFile(null);
+    setIsThreadOpen(!!peer);
+  };
+
   useEffect(() => {
     localStorage.setItem('chattingapp.friendNicknames', JSON.stringify(nicknames));
   }, [nicknames]);
@@ -176,7 +196,8 @@ function Chat() {
       .then((payload) => {
         if (!isMounted) return;
         setPeers(payload as Peer[]);
-        setSelectedPeer((prev) => prev ?? ((payload as Peer[])[0] ?? null));
+        // Avoid auto-selecting the first peer to allow showing the welcome screen
+        setSelectedPeer((prev) => prev ?? null);
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -443,6 +464,13 @@ function Chat() {
 
   const handleSend = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (stagedFile) {
+      await handleSendMedia(stagedFile);
+      setStagedFile(null);
+      return;
+    }
+
     const content = draft.trim();
     if (!content || !selectedPeer) {
       return;
@@ -482,8 +510,8 @@ function Chat() {
     try {
       const form = new FormData();
       form.append('file', file);
-      if (mediaCaption.trim()) form.append('caption', mediaCaption.trim());
-      else form.append('caption', '');
+      const captionText = mediaCaption.trim() || draft.trim();
+      form.append('caption', captionText);
 
       // backend expects: caption (Form) + file (UploadFile)
       const created = await apiPostForm(
@@ -493,6 +521,7 @@ function Chat() {
 
       setMessageHistory((prev) => [...prev, created]);
       setMediaCaption('');
+      setDraft('');
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : 'Could not send media');
     } finally {
@@ -723,15 +752,13 @@ function Chat() {
         key={peer.id}
         className={`conversation-card ${peer.id === selectedPeer?.id ? 'active' : ''} ${!isFriend ? 'locked' : ''} ${isPinned ? 'pinned' : ''}`}
         onClick={() => {
-          setSelectedPeer(peer);
-          setIsThreadOpen(true);
+          selectPeer(peer);
         }}
         role="button"
         tabIndex={0}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
-            setSelectedPeer(peer);
-            setIsThreadOpen(true);
+            selectPeer(peer);
           }
         }}
       >
@@ -953,15 +980,7 @@ function Chat() {
   };
 
   return (
-    <div className={`page-panel glass-panel chat-page ${isThreadOpen ? 'thread-open' : ''}`}>
-      <div className="panel-header">
-        <div>
-          <span className="hero-label">Chat</span>
-          <h2>Messaging</h2>
-        </div>
-        <Link className="primary-button add-friend-chat-button" to="/friends">Add friend</Link>
-      </div>
-
+    <div className={`page-panel glass-panel chat-page-container ${isThreadOpen ? 'thread-open' : ''} ${isDetailsOpen ? 'details-open' : ''}`}>
       <div className="chat-grid">
         <aside className="chat-list" aria-label="Conversations">
           <div className="chat-list-header">
@@ -969,6 +988,7 @@ function Chat() {
               <span className="hero-label">Inbox</span>
               <h3>Recent chats</h3>
             </div>
+            <Link className="primary-button add-friend-sidebar-btn" to="/friends" title="Add friend">Add friend</Link>
           </div>
 
           <div className="chat-list-search-bar">
@@ -1022,238 +1042,321 @@ function Chat() {
           {fetchError ? <div className="error-message" role="alert">{fetchError}</div> : null}
         </aside>
 
-        <section className="chat-thread glass-panel" aria-label="Chat thread">
-          <div className="thread-header">
-            <div>
-              <button className="ghost-button chat-back-button" type="button" onClick={() => setIsThreadOpen(false)}>
-                ← Back to chats
-              </button>
-              <p className="hero-label">Conversation</p>
-              <h3>{selectedPeerLabel}</h3>
-              {selectedPeer ? (
-                <input
-                  className="nickname-input"
-                  value={nicknames[selectedPeer.id] ?? ''}
-                  placeholder="Add local nickname"
-                  onChange={(event) => setNicknames((prev) => ({ ...prev, [selectedPeer.id]: event.target.value }))}
-                />
-              ) : null}
+        {!selectedPeer ? (
+          <section className="chat-thread-welcome glass-panel" aria-label="Welcome screen">
+            <div className="welcome-content">
+              <div className="welcome-illustration" aria-hidden="true">💬</div>
+              <h2>Welcome to ChattingApp</h2>
+              <p>Select a contact from the inbox list or add new friends to start messaging.</p>
+              <div className="welcome-actions">
+                <Link to="/friends" className="primary-button">Find friends</Link>
+                <Link to="/groups" className="secondary-button">Explore communities</Link>
+              </div>
+              <div className="welcome-onboarding-steps">
+                <h4>Getting Started Checklist</h4>
+                <ul>
+                  <li><span className="checkbox-icon">✅</span> Account created</li>
+                  <li><span className="checkbox-icon">👤</span> Add friends by username</li>
+                  <li><span className="checkbox-icon">💬</span> Send direct encrypted messages</li>
+                  <li><span className="checkbox-icon">🌐</span> Join hyperlocal societies</li>
+                </ul>
+              </div>
             </div>
-            <div className="thread-status">
-              <span className={`pill ${isConnected ? 'success' : 'soft'}`}>
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-              <span className={`pill ${peerStatus === 'online' ? 'success' : 'soft'}`}>
-                {selectedPeer ? `${peerStatus === 'online' ? 'Online' : 'Offline'}` : 'No peer selected'}
-              </span>
-              {isPeerTyping ? (
-                <div className="typing-indicator-dots" aria-label="Peer is typing">
-                  <span className="dot" />
-                  <span className="dot" />
-                  <span className="dot" />
+          </section>
+        ) : (
+          <section className="chat-thread glass-panel" aria-label="Chat thread">
+            <div className="thread-header">
+              <div className="header-contact-info">
+                <button className="ghost-button chat-back-button" type="button" onClick={() => setIsThreadOpen(false)} aria-label="Back to chats">
+                  ←
+                </button>
+                <div className="contact-avatar" onClick={() => setIsDetailsOpen(!isDetailsOpen)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setIsDetailsOpen(!isDetailsOpen)}>
+                  {(nicknames[selectedPeer.id] || selectedPeer.username).slice(0, 1).toUpperCase()}
                 </div>
-              ) : null}
+                <div className="contact-details" onClick={() => setIsDetailsOpen(!isDetailsOpen)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setIsDetailsOpen(!isDetailsOpen)}>
+                  <div className="contact-name-row">
+                    <h3>{selectedPeerLabel}</h3>
+                    <span className="verified-badge-tick" title="Verified User" aria-label="Verified user">☑️</span>
+                  </div>
+                  <p className="contact-status-subtitle">
+                    {peerStatus === 'online' ? (
+                      <span className="status-online">Online</span>
+                    ) : (
+                      <span className="status-offline">Offline</span>
+                    )}
+                    {isPeerTyping && <span className="typing-status"> · typing...</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="header-actions">
+                <button className="icon-btn call-btn" type="button" title="Voice call" onClick={() => alert('Voice call feature is coming soon!')} aria-label="Voice call">📞</button>
+                <button className="icon-btn video-call-btn" type="button" title="Video call" onClick={() => alert('Video call feature is coming soon!')} aria-label="Video call">🎥</button>
+                <button className="icon-btn info-btn" type="button" title={isDetailsOpen ? 'Hide contact details' : 'Show contact details'} onClick={() => setIsDetailsOpen(!isDetailsOpen)} aria-label="Toggle contact details">ℹ️</button>
+              </div>
             </div>
-          </div>
 
-          {selectedPeer ? (
             <ReconnectBanner
               isConnecting={isConnecting}
               isConnected={isConnected}
               error={error}
               label="Direct chat"
             />
-          ) : null}
 
-          {selectedPeer && !canChatWithSelectedPeer ? (
-            <div className="chat-lock-state" role="status">
-              <strong>Friend request required</strong>
-              <p>Non-friends cannot chat. Send a request and this conversation unlocks after acceptance.</p>
-              <button
-                className="primary-button"
-                type="button"
-                disabled={requestStatusByPeerId[selectedPeer.id] === 'pending' || requestStatusByPeerId[selectedPeer.id] === 'blocked'}
-                onClick={async () => {
-                  if (!selectedPeer) return;
-                  setRequestStatusByPeerId((prev) => ({ ...prev, [selectedPeer.id]: 'pending' }));
-                  try {
-                    await apiPost(`/api/v1/friends/requests/${selectedPeer.id}`, {});
-                    setFetchError('Friend request sent. Chat will unlock when accepted.');
-                  } catch (err) {
-                    setRequestStatusByPeerId((prev) => ({ ...prev, [selectedPeer.id]: 'idle' }));
-                    setFetchError(err instanceof Error ? err.message : 'Could not send friend request');
-                  }
-                }}
-              >
-                {requestStatusByPeerId[selectedPeer.id] === 'pending' ? 'Request pending' : 'Send friend request'}
-              </button>
-            </div>
-          ) : null}
-
-          {selectedPeer ? (
-            <div className="chat-feature-toolbar">
-              <ScheduleMessage receiverId={selectedPeer.id} onScheduled={() => setFetchError('Scheduled message created')} />
-              <VoiceMessage receiverId={selectedPeer.id} onSendVoiceMessage={handleSendVoiceMessage} />
-            </div>
-          ) : null}
-
-          <div className="message-search">
-            <input
-              type="search"
-              placeholder="Search messages"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              disabled={!selectedPeer}
-            />
-            {searchTerm.trim() ? (
-              <span className="pill soft">{isSearching ? 'Searching...' : `${searchResults.length} found`}</span>
-            ) : null}
-          </div>
-
-          <div
-            ref={threadMessagesRef}
-            onScroll={(e) => {
-              const target = e.currentTarget;
-              const isScrollUp = target.scrollHeight - target.scrollTop - target.clientHeight > 300;
-              setShowScrollBottom(isScrollUp);
-            }}
-            className="thread-messages"
-            role="log"
-            aria-live="polite"
-            aria-atomic="false"
-          >
-            <div className="chat-wallpaper" aria-hidden="true" />
-            {hasMoreHistory && !searchTerm.trim() && messageHistory.length > 0 ? (
-              <button
-                type="button"
-                className="ghost-button load-older-button"
-                onClick={handleLoadOlder}
-                disabled={loadingOlder}
-              >
-                {loadingOlder ? 'Loading older messages...' : 'Load older messages'}
-              </button>
-            ) : null}
-
-            {import.meta.env.DEV ? (
-              <div className="dev-badge">Chat render count: {renderCount}</div>
-            ) : null}
-
-            {loadingHistory ? (
-              <div className="message-row incoming">
-                <p>Loading conversation history...</p>
-              </div>
-            ) : renderableChatItems.length === 0 ? (
-              <div className="message-row incoming">
-                <p>{searchTerm.trim() ? 'No messages match your search.' : 'Start a new conversation by sending the first message.'}</p>
-              </div>
-            ) : renderableChatItems.length > 80 ? (
-              <div ref={listContainerRef} className="virtualized-thread-list">
-                <VirtualizedList
-                  items={renderableChatItems}
-                  itemHeight={estimateChatMessageHeight}
-                  estimatedItemHeight={140}
-                  height={listHeight}
-                  overscan={6}
-                  listRef={virtualListRef}
-                  className="virtualized-message-list"
-                  renderItem={(item, index) => renderMessageRow(item, index)}
-                />
-              </div>
-            ) : (
-              renderableChatItems.map((item, index) => renderMessageRow(item, index))
-            )}
-
-            {error ? (
-              <div className="message-row incoming error-message" role="alert">
-                <p>{error}</p>
-              </div>
-            ) : null}
-          </div>
-
-          {showScrollBottom && (
-            <button
-              type="button"
-              className="scroll-bottom-btn"
-              onClick={() => handleScrollToBottom()}
-              aria-label="Scroll to bottom"
-            >
-              ↓
-            </button>
-          )}
-
-          <form className="message-input floating-input-bar glass-panel" onSubmit={handleSend} aria-label="Send message form">
-            {replyTarget ? (
-              <div className="reply-composer" aria-live="polite">
-                <span className="reply-preview-text">Replying to: {displayMessageContent(replyTarget.content)}</span>
-                <button type="button" className="icon-btn close-reply" onClick={() => setReplyTarget(null)} aria-label="Cancel reply">
-                  ✕
+            {!canChatWithSelectedPeer ? (
+              <div className="chat-lock-state" role="status">
+                <strong>Friend request required</strong>
+                <p>Non-friends cannot chat. Send a request and this conversation unlocks after acceptance.</p>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={requestStatusByPeerId[selectedPeer.id] === 'pending' || requestStatusByPeerId[selectedPeer.id] === 'blocked'}
+                  onClick={async () => {
+                    setRequestStatusByPeerId((prev) => ({ ...prev, [selectedPeer.id]: 'pending' }));
+                    try {
+                      await apiPost(`/api/v1/friends/requests/${selectedPeer.id}`, {});
+                      setFetchError('Friend request sent. Chat will unlock when accepted.');
+                    } catch (err) {
+                      setRequestStatusByPeerId((prev) => ({ ...prev, [selectedPeer.id]: 'idle' }));
+                      setFetchError(err instanceof Error ? err.message : 'Could not send friend request');
+                    }
+                  }}
+                >
+                  {requestStatusByPeerId[selectedPeer.id] === 'pending' ? 'Request pending' : 'Send friend request'}
                 </button>
               </div>
             ) : null}
 
-            <div className="input-row">
-              <button type="button" className="icon-btn emoji-toggle" aria-label="Choose emoji" disabled={!selectedPeer}>
-                😊
+            <div className="chat-feature-toolbar">
+              <ScheduleMessage receiverId={selectedPeer.id} onScheduled={() => setFetchError('Scheduled message created')} />
+              <VoiceMessage receiverId={selectedPeer.id} onSendVoiceMessage={handleSendVoiceMessage} />
+            </div>
+
+            <div className="message-search">
+              <input
+                type="search"
+                placeholder="Search messages..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              {searchTerm.trim() ? (
+                <span className="pill soft">{isSearching ? 'Searching...' : `${searchResults.length} found`}</span>
+              ) : null}
+            </div>
+
+            <div
+              ref={threadMessagesRef}
+              onScroll={(e) => {
+                const target = e.currentTarget;
+                const isScrollUp = target.scrollHeight - target.scrollTop - target.clientHeight > 300;
+                setShowScrollBottom(isScrollUp);
+              }}
+              className="thread-messages"
+              role="log"
+              aria-live="polite"
+              aria-atomic="false"
+            >
+              <div className="chat-wallpaper" aria-hidden="true" />
+              {hasMoreHistory && !searchTerm.trim() && messageHistory.length > 0 ? (
+                <button
+                  type="button"
+                  className="ghost-button load-older-button"
+                  onClick={handleLoadOlder}
+                  disabled={loadingOlder}
+                >
+                  {loadingOlder ? 'Loading older messages...' : 'Load older messages'}
+                </button>
+              ) : null}
+
+              {import.meta.env.DEV ? (
+                <div className="dev-badge">Chat render count: {renderCount}</div>
+              ) : null}
+
+              {loadingHistory ? (
+                <div className="message-row incoming">
+                  <p>Loading conversation history...</p>
+                </div>
+              ) : renderableChatItems.length === 0 ? (
+                <div className="message-row incoming">
+                  <p>{searchTerm.trim() ? 'No messages match your search.' : 'Start a new conversation by sending the first message.'}</p>
+                </div>
+              ) : renderableChatItems.length > 80 ? (
+                <div ref={listContainerRef} className="virtualized-thread-list">
+                  <VirtualizedList
+                    items={renderableChatItems}
+                    itemHeight={estimateChatMessageHeight}
+                    estimatedItemHeight={140}
+                    height={listHeight}
+                    overscan={6}
+                    listRef={virtualListRef}
+                    className="virtualized-message-list"
+                    renderItem={(item, index) => renderMessageRow(item, index)}
+                  />
+                </div>
+              ) : (
+                renderableChatItems.map((item, index) => renderMessageRow(item, index))
+              )}
+
+              {error ? (
+                <div className="message-row incoming error-message" role="alert">
+                  <p>{error}</p>
+                </div>
+              ) : null}
+            </div>
+
+            {showScrollBottom && (
+              <button
+                type="button"
+                className="scroll-bottom-btn"
+                onClick={() => handleScrollToBottom()}
+                aria-label="Scroll to bottom"
+              >
+                ↓
               </button>
+            )}
 
-              <label className="icon-btn attachment-btn" aria-label="Attach file">
-                📎
-                <input
-                  type="file"
-                  className="sr-only"
-                  aria-label="Attach file"
-                  title="Attach file"
-                  disabled={!selectedPeer || !isConnected || mediaSending}
-                  accept="image/*,video/*,audio/*,application/pdf,text/plain"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void handleSendMedia(file);
-                    e.currentTarget.value = '';
-                  }}
-                />
-              </label>
+            <form className="message-input floating-input-bar glass-panel" onSubmit={handleSend} aria-label="Send message form">
+              {replyTarget ? (
+                <div className="reply-composer" aria-live="polite">
+                  <span className="reply-preview-text">Replying to: {displayMessageContent(replyTarget.content)}</span>
+                  <button type="button" className="icon-btn close-reply" onClick={() => setReplyTarget(null)} aria-label="Cancel reply">
+                    ✕
+                  </button>
+                </div>
+              ) : null}
 
-              <div className="input-stack">
+              {stagedFile && (
+                <div className="composer-staging-area">
+                  <div className="staging-preview-card">
+                    <div className="staging-thumb">
+                      {stagedFile.type.startsWith('image/') ? (
+                        <img src={URL.createObjectURL(stagedFile)} alt="Staged upload" className="staging-image-preview" />
+                      ) : (
+                        <span className="file-icon">📄</span>
+                      )}
+                    </div>
+                    <div className="staging-meta">
+                      <span className="staging-name">{stagedFile.name}</span>
+                      <span className="staging-size">{(stagedFile.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="staging-remove-btn"
+                      onClick={() => setStagedFile(null)}
+                      aria-label="Remove attachment"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="input-row">
+                <button type="button" className="icon-btn emoji-toggle" aria-label="Choose emoji" disabled={!selectedPeer}>
+                  😊
+                </button>
+
+                <label className="icon-btn attachment-btn" aria-label="Attach file">
+                  📎
+                  <input
+                    type="file"
+                    className="sr-only"
+                    aria-label="Attach file"
+                    title="Attach file"
+                    disabled={!selectedPeer || !isConnected || mediaSending}
+                    accept="image/*,video/*,audio/*,application/pdf,text/plain"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setStagedFile(file);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+
+                <div className="input-stack">
+                  <input
+                    className="chat-textfield"
+                    placeholder={selectedPeer ? 'Message...' : 'Select a chat to begin'}
+                    value={draft}
+                    onChange={handleDraftChange}
+                    disabled={!isConnected || !selectedPeer || !canChatWithSelectedPeer}
+                    aria-label="Message text"
+                    autoComplete="off"
+                  />
+                  {stagedFile && (
+                    <input
+                      className="caption-textfield animate-fade-in"
+                      type="text"
+                      placeholder="Add a caption..."
+                      value={mediaCaption}
+                      onChange={(e) => setMediaCaption(e.target.value)}
+                      disabled={!selectedPeer || !isConnected || mediaSending || !canChatWithSelectedPeer}
+                      aria-label="Media caption"
+                    />
+                  )}
+                </div>
+
+                <button
+                  className="primary-button send-btn"
+                  type="submit"
+                  disabled={!isConnected || (!draft.trim() && !stagedFile) || !selectedPeer || !canChatWithSelectedPeer}
+                  aria-label="Send message"
+                >
+                  ➤
+                </button>
+              </div>
+
+              {mediaSending && <div className="sending-indicator" aria-live="polite">Uploading media...</div>}
+            </form>
+          </section>
+        )}
+
+        {isDetailsOpen && selectedPeer && (
+          <aside className="chat-details-panel glass-panel animate-slide-left" aria-label="Contact details">
+            <div className="details-header">
+              <h3>Contact Info</h3>
+              <button className="icon-btn close-details-btn" onClick={() => setIsDetailsOpen(false)} aria-label="Close contact details">✕</button>
+            </div>
+            <div className="details-scrollable-content">
+              <div className="details-profile-card">
+                <div className="details-avatar">
+                  {(nicknames[selectedPeer.id] || selectedPeer.username).slice(0, 1).toUpperCase()}
+                </div>
+                <h3>{nicknames[selectedPeer.id] || selectedPeer.username}</h3>
+                <p className="details-subtext">@{selectedPeer.username}</p>
+                {selectedPeer.email && <p className="details-email">{selectedPeer.email}</p>}
+              </div>
+
+              <div className="details-form-section">
+                <label htmlFor="nickname-details-input">Edit Local Nickname</label>
                 <input
-                  className="chat-textfield"
-                  placeholder={selectedPeer ? 'Message...' : 'Select a chat to begin'}
-                  value={draft}
-                  onChange={handleDraftChange}
-                  disabled={!isConnected || !selectedPeer || !canChatWithSelectedPeer}
-                  aria-label="Message text"
-                  autoComplete="off"
-                />
-                <input
-                  className="caption-textfield"
-                  type="text"
-                  placeholder="Media caption (optional)..."
-                  value={mediaCaption}
-                  onChange={(e) => setMediaCaption(e.target.value)}
-                  disabled={!selectedPeer || !isConnected || mediaSending || !canChatWithSelectedPeer}
-                  aria-label="Media caption"
+                  id="nickname-details-input"
+                  className="chat-textfield nickname-details-input"
+                  value={nicknames[selectedPeer.id] ?? ''}
+                  placeholder="Enter local nickname"
+                  onChange={(event) => setNicknames((prev) => ({ ...prev, [selectedPeer.id]: event.target.value }))}
                 />
               </div>
 
-              <button
-                className="primary-button send-btn"
-                type="submit"
-                disabled={!isConnected || !draft.trim() || !selectedPeer || !canChatWithSelectedPeer}
-                aria-label="Send message"
-              >
-                ➤
-              </button>
-            </div>
+              {selectedPeer.bio && (
+                <div className="details-bio-section">
+                  <h4>Bio</h4>
+                  <p>{selectedPeer.bio}</p>
+                </div>
+              )}
 
-            {mediaSending && <div className="sending-indicator" aria-live="polite">Uploading media...</div>}
-          </form>
+              <div className="details-gallery-section">
+                <h4>Shared Media</h4>
+                <SharedMediaGallery receiverId={selectedPeer.id} conversationId={`${selectedPeer.id}-${user?.uid ?? 'anonymous'}`} />
+              </div>
 
-          {selectedPeer ? (
-            <div className="chat-feature-pane">
-              <SharedMediaGallery receiverId={selectedPeer.id} conversationId={`${selectedPeer.id}-${user?.uid ?? 'anonymous'}`} />
-              <ChatBackupExport />
+              <div className="details-actions-section">
+                <h4>Actions</h4>
+                <ChatBackupExport />
+                <button type="button" className="danger-button clear-history-btn" onClick={() => alert('Clear history is coming soon!')}>Clear Chat History</button>
+              </div>
             </div>
-          ) : null}
-        </section>
+          </aside>
+        )}
       </div>
     </div>
   );
