@@ -44,7 +44,7 @@ class ModerationService:
 
     @staticmethod
     async def _refresh_user_moderation(session: AsyncSession, user: User) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         changed = False
         if user.is_suspended and user.suspended_until and user.suspended_until <= now:
             user.is_suspended = False
@@ -107,7 +107,7 @@ class ModerationService:
             except Exception:
                 count = 0
         else:
-            cutoff = datetime.now(timezone.utc) - timedelta(seconds=ModerationService.MESSAGE_RATE_WINDOW_SECONDS)
+            cutoff = (datetime.now(timezone.utc) - timedelta(seconds=ModerationService.MESSAGE_RATE_WINDOW_SECONDS)).replace(tzinfo=None)
             result = await session.execute(
                 select(func.count()).select_from(Message).where(
                     Message.sender_id == user_id_value,
@@ -272,7 +272,7 @@ class ModerationService:
 
         target_type = report.target_type
         target_id = report.target_id
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if action_type in {"mute", "temporary_suspension", "permanent_ban", "shadow_ban", "unmute", "lift_suspension"}:
             if target_type != "user":
@@ -352,7 +352,7 @@ class ModerationService:
 
         report.status = status
         report.reviewed_by = moderator_id
-        report.reviewed_at = datetime.now(timezone.utc)
+        report.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         report.review_notes = reason
         await session.flush()
         await session.commit()
@@ -398,7 +398,7 @@ class ModerationService:
         base_score = 0.5
         
         # Account age factor (0 to 0.2 points)
-        account_age_days = (datetime.now(timezone.utc) - user.created_at).days
+        account_age_days = (datetime.now(timezone.utc).replace(tzinfo=None) - user.created_at).days
         age_bonus = min(account_age_days / 365 * 0.2, 0.2)
         
         # Activity factor (0 to 0.15 points)

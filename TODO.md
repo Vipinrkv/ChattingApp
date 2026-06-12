@@ -41,6 +41,20 @@ This checklist details the outstanding tasks for production release, sorted by p
 - **Dependencies**: None
 - **Acceptance Criteria**: Clicking the "Info" icon in the chat header toggles the right panel, adjusting the center column size without clipping.
 
+### 6. Resolve SQLite Database Disk Locks on Windows Hosts
+- **Description**: Relocate the development SQLite database file from OneDrive-synchronized workspace folder to the system temporary directory during local test execution.
+- **Priority**: P0 (Critical)
+- **Estimated Effort**: 0.5 days
+- **Dependencies**: None
+- **Acceptance Criteria**: Pytest test suite runs to completion on local Windows machines without disk lock error interruptions.
+
+### 7. Mitigate Firebase Auth Lock-In with Local JWT Fallback
+- **Description**: Build fallback token signing and verification logic inside the authentication service using self-hosted JWT parameters (e.g. Supabase Auth credentials) to bypass Firebase failures.
+- **Priority**: P0 (Critical)
+- **Estimated Effort**: 3 days
+- **Dependencies**: None
+- **Acceptance Criteria**: Disabling Firebase settings allows users with local accounts to authenticate and fetch profiles.
+
 ---
 
 ## 🟡 P1 - High Priority Operational Tasks
@@ -72,6 +86,13 @@ This checklist details the outstanding tasks for production release, sorted by p
 - **Estimated Effort**: 1 day
 - **Dependencies**: None
 - **Acceptance Criteria**: Selected attachments show preview thumbnails and description caption fields before sending.
+
+### 5. Implement Redis Cache Degradation Fallbacks
+- **Description**: Add connection error handling within the backend `redis_cache.py` service. If Redis becomes temporarily unreachable, queries should fail over directly to PostgreSQL read-only paths and automatically re-try connection checks.
+- **Priority**: P1 (High)
+- **Estimated Effort**: 1.5 days
+- **Dependencies**: None
+- **Acceptance Criteria**: Shutting down the Redis service locally does not trigger backend API crashes; requests fallback to querying the database directly.
 
 ---
 

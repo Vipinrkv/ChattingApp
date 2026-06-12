@@ -57,7 +57,7 @@ class SessionService:
                 refresh_token_hash=SessionService.hash_token(refresh_token),
                 access_token_hash=SessionService.hash_token(access_token),
                 status=SessionStatus.ACTIVE,
-                expires_at=datetime.now(timezone.utc) + expires_delta
+                expires_at=(datetime.now(timezone.utc) + expires_delta).replace(tzinfo=None)
             )
             
             session.add(user_session)
@@ -92,7 +92,7 @@ class SessionService:
                     UserSession.user_id == user_id,
                     UserSession.refresh_token_hash == token_hash,
                     UserSession.status == SessionStatus.ACTIVE,
-                    UserSession.expires_at > datetime.now(timezone.utc)
+                    UserSession.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
                 )
             )
             user_session = (await session.execute(query)).scalar_one_or_none()
@@ -101,7 +101,7 @@ class SessionService:
                 return None
             
             # Update last activity
-            user_session.last_activity_at = datetime.now(timezone.utc)
+            user_session.last_activity_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await session.flush()
             
             return {
@@ -127,7 +127,7 @@ class SessionService:
             
             if user_session:
                 user_session.status = SessionStatus.REVOKED
-                user_session.revoked_at = datetime.now(timezone.utc)
+                user_session.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 user_session.revoke_reason = reason
                 await session.flush()
                 
@@ -163,7 +163,7 @@ class SessionService:
             
             for user_session in sessions:
                 user_session.status = SessionStatus.REVOKED
-                user_session.revoked_at = datetime.now(timezone.utc)
+                user_session.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 user_session.revoke_reason = "security_measure"
             
             await session.flush()
@@ -187,7 +187,7 @@ class SessionService:
                 and_(
                     UserSession.user_id == user_id,
                     UserSession.status == SessionStatus.ACTIVE,
-                    UserSession.expires_at > datetime.now(timezone.utc)
+                    UserSession.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
                 )
             ).order_by(UserSession.last_activity_at.desc())
             
@@ -250,7 +250,7 @@ class SessionService:
         """Remove expired sessions"""
         try:
             query = delete(UserSession).where(
-                UserSession.expires_at <= datetime.now(timezone.utc)
+                UserSession.expires_at <= datetime.now(timezone.utc).replace(tzinfo=None)
             )
             result = await session.execute(query)
             await session.flush()
@@ -282,7 +282,7 @@ class SessionService:
                     UserSession.user_id == user_id,
                     UserSession.refresh_token_hash == token_hash,
                     UserSession.status == SessionStatus.ACTIVE,
-                    UserSession.expires_at > datetime.now(timezone.utc)
+                    UserSession.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
                 )
             )
             user_session = (await session.execute(query)).scalar_one_or_none()
@@ -295,7 +295,7 @@ class SessionService:
             if user_session.device_id != device_id:
                 logger.warning(f"Session binding validation failed: device_id {device_id} does not match session device {user_session.device_id}")
                 user_session.status = SessionStatus.REVOKED
-                user_session.revoked_at = datetime.now(timezone.utc)
+                user_session.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 user_session.revoke_reason = "device_id_mismatch"
                 await session.flush()
                 return None
@@ -308,8 +308,8 @@ class SessionService:
             # Update the session with new token hashes
             user_session.refresh_token_hash = SessionService.hash_token(new_refresh_token)
             user_session.access_token_hash = SessionService.hash_token(new_access_token)
-            user_session.last_activity_at = datetime.now(timezone.utc)
-            user_session.expires_at = datetime.now(timezone.utc) + expires_delta
+            user_session.last_activity_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            user_session.expires_at = (datetime.now(timezone.utc) + expires_delta).replace(tzinfo=None)
             user_session.ip_address = ip_address
             user_session.user_agent = user_agent
             

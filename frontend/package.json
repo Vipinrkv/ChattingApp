@@ -15,8 +15,6 @@
   "dependencies": {
     "@capacitor/core": "^5.7.0",
     "@tanstack/react-query": "^5.100.14",
-    "@tanstack/react-query-devtools": "^5.100.14",
-    "chattingapp": "file:..",
     "firebase": "^12.13.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -27,6 +25,7 @@
   "devDependencies": {
     "@capacitor/android": "^5.7.0",
     "@capacitor/cli": "^5.7.0",
+    "@tanstack/react-query-devtools": "^5.100.14",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.0.0",

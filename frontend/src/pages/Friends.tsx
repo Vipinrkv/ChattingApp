@@ -14,6 +14,7 @@ interface FriendRequest {
   addressee_id: string;
   status: string;
   created_at: string;
+  requester_username?: string | null;
 }
 
 type RequestStatus = 'idle' | 'pending' | 'accepted' | 'rejected' | 'blocked';
@@ -223,7 +224,7 @@ function Friends() {
             {requests.map((request) => (
               <article className="friend-card" key={request.id}>
                 <div>
-                  <strong>Request from {request.requester_id}</strong>
+                  <strong>Request from @{request.requester_username || request.requester_id}</strong>
                   <p className="small-note">Received {new Date(request.created_at).toLocaleString()}</p>
                 </div>
                 <div className="friend-card-actions">

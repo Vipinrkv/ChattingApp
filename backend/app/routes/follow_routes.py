@@ -17,7 +17,6 @@ from app.services.follow_service import (
 )
 
 router = APIRouter(
-    prefix="/follows",
     tags=["follows"],
     dependencies=[Depends(get_current_user_dep)],
 )

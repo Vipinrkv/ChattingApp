@@ -43,7 +43,7 @@ class CSRFService:
                 user_id=user_id,
                 token_hash=token_hash,
                 session_id=session_id,
-                expires_at=datetime.now(timezone.utc) + expires_delta
+                expires_at=(datetime.now(timezone.utc) + expires_delta).replace(tzinfo=None)
             )
             
             session.add(csrf_token)
@@ -71,7 +71,7 @@ class CSRFService:
                 and_(
                     CSRFToken.token_hash == token_hash,
                     CSRFToken.is_used == False,
-                    CSRFToken.expires_at > datetime.now(timezone.utc)
+                    CSRFToken.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
                 )
             )
             
@@ -83,7 +83,7 @@ class CSRFService:
             if csrf_token:
                 if consume:
                     csrf_token.is_used = True
-                    csrf_token.used_at = datetime.now(timezone.utc)
+                    csrf_token.used_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 await session.flush()
                 
                 logger.debug("CSRF token verified successfully")
@@ -100,7 +100,7 @@ class CSRFService:
         """Remove expired CSRF tokens"""
         try:
             query = delete(CSRFToken).where(
-                CSRFToken.expires_at <= datetime.now(timezone.utc)
+                CSRFToken.expires_at <= datetime.now(timezone.utc).replace(tzinfo=None)
             )
             result = await session.execute(query)
             await session.flush()

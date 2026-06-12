@@ -85,6 +85,7 @@ function Chat() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<MessageData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [deletedMessageIds, setDeletedMessageIds] = useState<Set<string>>(new Set());
   const [editedMessages, setEditedMessages] = useState<Record<string, MessageData>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -805,6 +806,38 @@ function Chat() {
     );
   };
 
+  const renderMessageContent = (content: string) => {
+    const text = displayMessageContent(content);
+    if (!searchTerm.trim() || isEncryptedToken(content)) {
+      return text;
+    }
+    const query = searchTerm.trim();
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) {
+      return text;
+    }
+    const parts = [];
+    let remaining = text;
+    let keyCounter = 0;
+    while (remaining) {
+      const matchIdx = remaining.toLowerCase().indexOf(query.toLowerCase());
+      if (matchIdx === -1) {
+        parts.push(remaining);
+        break;
+      }
+      if (matchIdx > 0) {
+        parts.push(remaining.substring(0, matchIdx));
+      }
+      parts.push(
+        <mark key={`highlight-${keyCounter++}`} className="search-highlight">
+          {remaining.substring(matchIdx, matchIdx + query.length)}
+        </mark>
+      );
+      remaining = remaining.substring(matchIdx + query.length);
+    }
+    return <>{parts}</>;
+  };
+
   const renderMessageRow = (item: any, index: number) => {
     if (item.type === 'date-separator') {
       return (
@@ -933,7 +966,7 @@ function Chat() {
 
             {message.content ? (
               <p className={isEncryptedToken(message.content) ? 'encrypted-message-placeholder' : undefined}>
-                {displayMessageContent(message.content)}
+                {renderMessageContent(message.content)}
               </p>
             ) : null}
           </>
@@ -980,7 +1013,7 @@ function Chat() {
   };
 
   return (
-    <div className={`page-panel glass-panel chat-page-container ${isThreadOpen ? 'thread-open' : ''} ${isDetailsOpen ? 'details-open' : ''}`}>
+    <div className={`page-panel glass-panel chat-page chat-page-container ${isThreadOpen ? 'thread-open' : ''} ${isDetailsOpen ? 'details-open' : ''}`}>
       <div className="chat-grid">
         <aside className="chat-list" aria-label="Conversations">
           <div className="chat-list-header">
@@ -1089,6 +1122,7 @@ function Chat() {
                 </div>
               </div>
               <div className="header-actions">
+                <button className={`icon-btn search-thread-btn ${isSearchOpen ? 'active' : ''}`} type="button" title="Search messages" onClick={() => { setIsSearchOpen(!isSearchOpen); if (isSearchOpen) setSearchTerm(''); }} aria-label="Search messages">🔍</button>
                 <button className="icon-btn call-btn" type="button" title="Voice call" onClick={() => alert('Voice call feature is coming soon!')} aria-label="Voice call">📞</button>
                 <button className="icon-btn video-call-btn" type="button" title="Video call" onClick={() => alert('Video call feature is coming soon!')} aria-label="Video call">🎥</button>
                 <button className="icon-btn info-btn" type="button" title={isDetailsOpen ? 'Hide contact details' : 'Show contact details'} onClick={() => setIsDetailsOpen(!isDetailsOpen)} aria-label="Toggle contact details">ℹ️</button>
@@ -1131,17 +1165,21 @@ function Chat() {
               <VoiceMessage receiverId={selectedPeer.id} onSendVoiceMessage={handleSendVoiceMessage} />
             </div>
 
-            <div className="message-search">
-              <input
-                type="search"
-                placeholder="Search messages..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
-              {searchTerm.trim() ? (
-                <span className="pill soft">{isSearching ? 'Searching...' : `${searchResults.length} found`}</span>
-              ) : null}
-            </div>
+            {isSearchOpen && (
+              <div className="message-search">
+                <input
+                  type="search"
+                  placeholder="Search messages..."
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  autoFocus
+                />
+                {searchTerm.trim() ? (
+                  <span className="pill soft">{isSearching ? 'Searching...' : `${searchResults.length} found`}</span>
+                ) : null}
+                <button className="ghost-button" type="button" onClick={() => { setIsSearchOpen(false); setSearchTerm(''); }} style={{ marginLeft: '8px', padding: '4px 8px' }}>Cancel</button>
+              </div>
+            )}
 
             <div
               ref={threadMessagesRef}

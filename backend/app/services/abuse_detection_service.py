@@ -22,7 +22,7 @@ class AbuseDetectionService:
     ) -> bool:
         """Detect brute force attacks on account"""
         try:
-            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+            cutoff_time = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).replace(tzinfo=None)
             
             query = select(func.count()).select_from(LoginHistory).where(
                 and_(
@@ -51,7 +51,7 @@ class AbuseDetectionService:
     ) -> List[Dict[str, Any]]:
         """Detect distributed attacks from multiple IPs"""
         try:
-            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+            cutoff_time = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).replace(tzinfo=None)
             
             query = select(
                 LoginHistory.ip_address,
@@ -89,7 +89,7 @@ class AbuseDetectionService:
     ) -> bool:
         """Detect credential stuffing from single IP"""
         try:
-            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+            cutoff_time = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).replace(tzinfo=None)
             
             query = select(func.count()).select_from(LoginHistory).where(
                 and_(
@@ -118,7 +118,7 @@ class AbuseDetectionService:
     ) -> bool:
         """Detect account enumeration attacks"""
         try:
-            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+            cutoff_time = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).replace(tzinfo=None)
             
             # Count unique identifiers with failures from failed logins
             query = select(func.count(func.distinct(LoginHistory.identifier))).select_from(
@@ -156,7 +156,7 @@ class AbuseDetectionService:
         - Multiple failed attempts followed by success
         """
         try:
-            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+            cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=window_hours)).replace(tzinfo=None)
             
             # Get recent successful logins
             query = select(LoginHistory).where(

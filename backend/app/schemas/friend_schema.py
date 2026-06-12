@@ -12,6 +12,7 @@ class FriendRequestResponse(BaseModel):
     status: str
     created_at: datetime
     responded_at: datetime | None = None
+    requester_username: str | None = None
 
     class Config:
         from_attributes = True

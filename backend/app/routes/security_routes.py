@@ -400,7 +400,7 @@ async def threat_dashboard(
     recent_failed_logins = await session.scalar(
         select(func.count()).select_from(LoginHistory).where(
             LoginHistory.status == LoginStatus.FAILED,
-            LoginHistory.created_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+            LoginHistory.created_at >= (datetime.now(timezone.utc) - timedelta(hours=24)).replace(tzinfo=None),
         )
     )
     return {

@@ -987,14 +987,20 @@ select {
     justify-content: space-between;
     gap: 12px;
     cursor: pointer;
-    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    padding: 12px 14px;
+    margin: 2px 4px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
-.conversation-card:hover,
+.conversation-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .conversation-card.active {
-    transform: translateY(-1px);
-    background: rgba(59, 130, 246, 0.14);
-    border-color: rgba(59, 130, 246, 0.24);
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.18);
 }
 
 .conversation-title {
@@ -1060,19 +1066,33 @@ select {
     display: inline-flex;
     flex-direction: column;
     gap: 10px;
-    border-radius: 22px;
-    padding: 14px 18px;
+    padding: 12px 16px;
     line-height: 1.6;
+    transition: transform 0.15s ease;
 }
 
 .message-row.incoming {
     align-self: flex-start;
     background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border-radius: 4px 18px 18px 18px;
+}
+
+.message-row.incoming.consecutive {
+    border-radius: 18px;
 }
 
 .message-row.outgoing {
     align-self: flex-end;
-    background: rgba(59, 130, 246, 0.16);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(5, 150, 105, 0.12));
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.04);
+    border-radius: 18px 4px 18px 18px;
+}
+
+.message-row.outgoing.consecutive {
+    border-radius: 18px;
 }
 
 .message-row p {
@@ -2152,9 +2172,41 @@ select {
 }
 
 .chat-list-content,
-.thread-messages {
+.thread-messages,
+.friend-result-list {
     scrollbar-width: thin;
     scrollbar-color: var(--accent-soft) transparent;
+}
+
+/* Custom Scrollbars for Webkit browsers (Chrome, Edge, Safari) */
+.chat-list-content::-webkit-scrollbar,
+.thread-messages::-webkit-scrollbar,
+.details-scrollable-content::-webkit-scrollbar,
+.friend-result-list::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.chat-list-content::-webkit-scrollbar-track,
+.thread-messages::-webkit-scrollbar-track,
+.details-scrollable-content::-webkit-scrollbar-track,
+.friend-result-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-list-content::-webkit-scrollbar-thumb,
+.thread-messages::-webkit-scrollbar-thumb,
+.details-scrollable-content::-webkit-scrollbar-thumb,
+.friend-result-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+}
+
+.chat-list-content::-webkit-scrollbar-thumb:hover,
+.thread-messages::-webkit-scrollbar-thumb:hover,
+.details-scrollable-content::-webkit-scrollbar-thumb:hover,
+.friend-result-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
 }
 
 .chat-thread {
@@ -2758,6 +2810,12 @@ select {
     gap: 14px;
 }
 
+.friend-result-list {
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
 .mobile-search-sheet label,
 .create-post-controls label {
     display: grid;
@@ -3129,21 +3187,7 @@ select {
         justify-content: stretch;
     }
 
-    .chat-page .chat-grid {
-        display: block;
-    }
-
-    .chat-page .chat-thread {
-        display: none;
-    }
-
-    .chat-page.thread-open .chat-list {
-        display: none;
-    }
-
-    .chat-page.thread-open .chat-thread {
-        display: grid;
-    }
+    /* Mobile chat panels are structured under .chat-page-container using flex width and translateX translate slides */
 
     .chat-back-button {
         display: inline-flex;
@@ -3560,30 +3604,7 @@ select {
     overflow: visible !important;
 }
 
-/* WhatsApp/Telegram-style bubble tails */
-.message-row:not(.consecutive).incoming::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -6px;
-    width: 12px;
-    height: 12px;
-    background: inherit;
-    clip-path: polygon(100% 0, 0 0, 100% 100%);
-    z-index: -1;
-}
-
-.message-row:not(.consecutive).outgoing::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: -6px;
-    width: 12px;
-    height: 12px;
-    background: inherit;
-    clip-path: polygon(0 0, 100% 0, 0 100%);
-    z-index: -1;
-}
+/* WhatsApp/Telegram-style bubble tails handled via asymmetric border-radii */
 
 /* Hover quick-reactions emoji toolbar */
 .message-quick-reactions {
@@ -3735,8 +3756,8 @@ select {
 .chat-page-container {
     padding: 0 !important;
     overflow: hidden;
-    height: calc(100vh - 120px);
-    min-height: min(720px, calc(100vh - 120px));
+    height: calc(100vh - 148px);
+    min-height: min(580px, calc(100vh - 148px));
 }
 
 /* 3-Column Grid Configuration */
@@ -4315,32 +4336,35 @@ select {
 /* Mobile Viewports responsiveness */
 @media (max-width: 767px) {
     .chat-page-container {
-        height: calc(100vh - 140px);
+        height: calc(100vh - 148px);
         min-height: auto;
+        overflow: hidden;
+        position: relative;
     }
 
     .chat-page-container .chat-grid {
-        display: block;
+        display: flex;
+        width: 200%;
         height: 100%;
+        transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Single pane overlay logic */
+    .chat-page-container.thread-open .chat-grid {
+        transform: translateX(-50%);
+    }
+
     .chat-page-container .chat-list {
+        width: 50%;
+        flex-shrink: 0;
         display: flex;
         border-right: none;
     }
 
     .chat-page-container .chat-thread,
     .chat-page-container .chat-thread-welcome {
-        display: none;
-    }
-
-    .chat-page-container.thread-open .chat-list {
-        display: none;
-    }
-
-    .chat-page-container.thread-open .chat-thread {
-        display: flex;
+        width: 50%;
+        flex-shrink: 0;
+        display: flex !important;
     }
 
     .chat-back-button {
@@ -4357,7 +4381,7 @@ select {
 
     /* Details panel behaves as fullscreen overlay on mobile */
     .chat-page-container.details-open .chat-thread {
-        display: none;
+        display: none !important;
     }
 
     .chat-page-container.details-open .chat-details-panel {
@@ -4367,5 +4391,13 @@ select {
         height: 100% !important;
         z-index: 110;
     }
+}
+
+mark.search-highlight {
+    background: #eab308 !important;
+    color: #000000 !important;
+    border-radius: 2px;
+    padding: 0 2px;
+    font-weight: 600;
 }
 

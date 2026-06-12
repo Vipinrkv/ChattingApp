@@ -102,7 +102,7 @@ async def respond_to_friend_request(
         if action == "accept"
         else FriendRequestStatus.DECLINED
     )
-    friend_request.responded_at = datetime.now(timezone.utc)
+    friend_request.responded_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await session.commit()
     await session.refresh(friend_request)
     if friend_request.status == FriendRequestStatus.ACCEPTED:
@@ -155,14 +155,20 @@ async def list_pending_friend_requests(
     user_id: uuid.UUID,
 ) -> list[FriendRequest]:
     result = await session.execute(
-        select(FriendRequest)
+        select(FriendRequest, User.username)
+        .join(User, FriendRequest.requester_id == User.id)
         .where(
             FriendRequest.addressee_id == user_id,
             FriendRequest.status == FriendRequestStatus.PENDING,
         )
         .order_by(FriendRequest.created_at.desc())
     )
-    return list(result.scalars().all())
+    requests = []
+    for row in result.all():
+        req, username = row
+        req.requester_username = username
+        requests.append(req)
+    return requests
 
 
 async def are_friends(

@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
 
 const items = [
-  { label: 'Home', path: '/', icon: 'H' },
-  { label: 'Feed', path: '/feed', icon: 'F' },
-  { label: 'Chats', path: '/chat', icon: 'M' },
-  { label: 'Groups', path: '/groups', icon: 'G' },
-  { label: 'Profile', path: '/profile', icon: 'P' },
-  { label: 'Settings', path: '/settings', icon: 'S' },
+  { label: 'Home', path: '/', icon: '🏠' },
+  { label: 'Feed', path: '/feed', icon: '📰' },
+  { label: 'Chats', path: '/chat', icon: '💬' },
+  { label: 'Groups', path: '/groups', icon: '👥' },
+  { label: 'Profile', path: '/profile', icon: '👤' },
+  { label: 'Settings', path: '/settings', icon: '⚙️' },
 ];
 
 export default function BottomNav() {

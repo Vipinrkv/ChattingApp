@@ -83,7 +83,7 @@ class LoginHistoryService:
                 and_(
                     LoginHistory.ip_address == ip_address,
                     LoginHistory.status == LoginStatus.FAILED,
-                    LoginHistory.created_at > datetime.now(timezone.utc) - timedelta(hours=1)
+                    LoginHistory.created_at > (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
                 )
             )
             failed_count = (await session.execute(query)).scalar()

@@ -101,7 +101,7 @@ class IPReputationService:
             query = select(RateLimitEntry).where(
                 and_(
                     RateLimitEntry.limit_key == limit_key,
-                    RateLimitEntry.expires_at > datetime.now(timezone.utc)
+                    RateLimitEntry.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
                 )
             )
             entry = (await session.execute(query)).scalar_one_or_none()
@@ -117,7 +117,7 @@ class IPReputationService:
                 limit_key=limit_key,
                 attempt_count=1,
                 max_attempts=max_attempts,
-                expires_at=datetime.now(timezone.utc) + timedelta(seconds=window_seconds)
+                expires_at=(datetime.now(timezone.utc) + timedelta(seconds=window_seconds)).replace(tzinfo=None)
             )
             session.add(new_entry)
             await session.flush()

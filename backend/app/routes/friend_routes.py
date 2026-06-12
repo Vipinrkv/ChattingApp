@@ -21,7 +21,6 @@ from app.services.friend_service import (
 )
 
 router = APIRouter(
-    prefix="/friends",
     tags=["friends"],
     dependencies=[Depends(get_current_user_dep)],
 )
