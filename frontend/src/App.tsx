@@ -3,6 +3,7 @@
 import React, { Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTheme } from './ui/theme';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Landing = React.lazy(() => import('./pages/Landing'));
 const Feed = React.lazy(() => import('./pages/Feed'));
@@ -173,6 +174,7 @@ function App() {
       </main>
       {!hideLayout && user && <RightSidebar />}
       {!hideLayout && user && <BottomNav />}
+      <SpeedInsights />
     </div>
   );
 }
