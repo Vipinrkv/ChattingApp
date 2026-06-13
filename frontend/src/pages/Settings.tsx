@@ -17,7 +17,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 export default function Settings() {
-  const { theme, preference, setTheme } = useTheme();
+  const { theme, preference, setTheme, accentColor, setAccentColor } = useTheme();
   const { push } = useToasts();
 
   const [passphrase, setPassphrase] = useState('');
@@ -193,10 +193,12 @@ export default function Settings() {
         <p style={{ color: 'var(--muted)', margin: 0 }}>Configure client behavior, local database backups, and visualization options.</p>
       </header>
 
-      {/* Theme Options */}
-      <section className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Theme Preference</h2>
-        <p style={{ color: 'var(--muted)', margin: 0, fontSize: 'var(--text-sm)' }}>Choose a theme or adapt to your operating system preference.</p>
+      {/* Theme and Accent Color Options */}
+      <section className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div>
+          <h2 style={{ fontSize: 'var(--text-lg)', margin: '0 0 4px 0', fontWeight: '600' }}>Theme Preference</h2>
+          <p style={{ color: 'var(--muted)', margin: 0, fontSize: 'var(--text-sm)' }}>Choose a theme or adapt to your operating system preference.</p>
+        </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           {(['light', 'dark', 'system'] as const).map((pref) => (
             <button
@@ -211,11 +213,62 @@ export default function Settings() {
                 background: preference === pref ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'transparent',
                 color: preference === pref ? '#fff' : 'var(--text)',
                 cursor: 'pointer',
+                fontWeight: preference === pref ? '600' : 'normal',
+                boxShadow: preference === pref ? '0 4px 12px var(--focus-ring)' : 'none',
+                transition: 'all 0.2s ease',
               }}
             >
               {pref}
             </button>
           ))}
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '4px' }}>
+          <h2 style={{ fontSize: 'var(--text-lg)', margin: '0 0 4px 0', fontWeight: '600' }}>Brand Accent Color</h2>
+          <p style={{ color: 'var(--muted)', margin: 0, fontSize: 'var(--text-sm)' }}>Customize the application's primary accent color scheme.</p>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+          {([
+            { id: 'blue', name: 'Cosmic Blue', color: '#2563eb' },
+            { id: 'green', name: 'Emerald Green', color: '#10b981' },
+            { id: 'orange', name: 'Sunset Orange', color: '#f97316' },
+            { id: 'red', name: 'Passion Red', color: '#ef4444' },
+            { id: 'purple', name: 'Royal Purple', color: '#8b5cf6' },
+            { id: 'pink', name: 'Sweet Pink', color: '#ec4899' },
+          ] as const).map((item) => {
+            const isSelected = accentColor === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setAccentColor(item.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: isSelected ? `2px solid ${item.color}` : '1px solid var(--border)',
+                  background: 'var(--surface-soft)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  fontWeight: isSelected ? '600' : 'normal',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isSelected ? `0 4px 14px ${item.color}33` : 'none',
+                  transform: isSelected ? 'scale(1.03)' : 'scale(1)',
+                }}
+              >
+                <span style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  backgroundColor: item.color,
+                  display: 'inline-block',
+                  boxShadow: `0 0 6px ${item.color}`,
+                }} />
+                {item.name}
+              </button>
+            );
+          })}
         </div>
       </section>
 

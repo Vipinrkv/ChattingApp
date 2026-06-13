@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import NotificationDropdown from '../ui/NotificationDropdown';
@@ -11,7 +10,6 @@ function Topbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, user } = useAuth();
-  const themeCtx = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -23,10 +21,6 @@ function Topbar() {
   const handleSignOut = async () => {
     await logout();
     navigate('/login');
-  };
-
-  const toggle = () => {
-    themeCtx.toggle();
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -74,10 +68,6 @@ function Topbar() {
       </div>
 
       <div className="topbar-actions">
-        <Button variant="ghost" onClick={toggle} aria-label="Toggle theme">
-          {themeCtx.theme === 'dark' ? 'Light mode' : 'Dark mode'}
-        </Button>
-
         <NotificationDropdown />
 
         <div className="user-block">

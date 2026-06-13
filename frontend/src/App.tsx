@@ -27,6 +27,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './contexts/AuthContext';
 import { useSwipeNavigation } from './hooks/useSwipeNavigation';
 import { useToasts } from './ui/ToastProvider';
+import { Analytics } from '@vercel/analytics/react';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -118,6 +119,7 @@ function App() {
 
   return (
     <div className={shellClass} data-theme={theme}>
+      <Analytics />
       <a className="skip-link" href="#main-content">Skip to content</a>
       <div className="background-grid" aria-hidden="true"></div>
       {!hideLayout && user && (
