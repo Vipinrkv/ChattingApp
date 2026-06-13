@@ -10,5 +10,9 @@ async def run_transaction(
     *args: Any,
     **kwargs: Any,
 ) -> T:
-    async with session.begin():
+    if session.in_transaction():
         return await work(*args, **kwargs)
+    else:
+        async with session.begin():
+            return await work(*args, **kwargs)
+

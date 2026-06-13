@@ -10,17 +10,15 @@ async def main():
     print("Connecting to database:", DATABASE_URL)
     engine = create_async_engine(DATABASE_URL, connect_args={"statement_cache_size": 0})
     async with engine.connect() as conn:
-        print("Dropping application tables...")
-        tables = [
-            "alembic_version", "post_reposts", "post_likes", "post_comments", 
-            "group_messages", "group_posts", "group_members", "chat_settings", 
-            "posts", "messages", "blocks", "followers", "friends", "groups", "users",
-            "mfa_setups", "user_sessions", "user_devices", "login_history", 
-            "suspicious_activities", "csrf_tokens", "ip_reputations", 
-            "rate_limit_entries", "security_audit_logs"
-        ]
+        print("Fetching and dropping all application tables dynamically...")
+        tables_res = await conn.execute(text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+        ))
+        tables = [row[0] for row in tables_res.fetchall()]
+        print(f"Found {len(tables)} tables to drop.")
         for table in tables:
-            await conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE;"))
+            await conn.execute(text(f"DROP TABLE IF EXISTS \"{table}\" CASCADE;"))
             
         print("Dropping old enum types...")
         enums = [

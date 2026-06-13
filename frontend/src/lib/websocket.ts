@@ -94,7 +94,21 @@ export class WebSocketManager {
     }) as EventListener);
 
     if (wsBase) {
-      this.url = wsBase.replace(/\/$/, '');
+      let resolvedUrl = wsBase.replace(/\/$/, '');
+      try {
+        // Normalize ws/wss protocols to http/https for URL parsing
+        const wsUrlObj = new URL(resolvedUrl.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:'));
+        const apiUrlObj = new URL(apiBase);
+        if (wsUrlObj.hostname !== apiUrlObj.hostname) {
+          console.warn(`[WebSocket] Hostname mismatch! wsBase: ${wsUrlObj.hostname}, apiBase: ${apiUrlObj.hostname}. Rewriting WebSocket hostname.`);
+          wsUrlObj.hostname = apiUrlObj.hostname;
+          wsUrlObj.port = apiUrlObj.port;
+          resolvedUrl = wsUrlObj.toString().replace(/^http:/, 'ws:').replace(/^https:/, 'wss:').replace(/\/$/, '');
+        }
+      } catch (e) {
+        console.error('[WebSocket] Failed to parse wsBase, falling back to apiBase', e);
+      }
+      this.url = resolvedUrl;
     } else {
       const url = new URL(apiBase);
       url.pathname = '';
