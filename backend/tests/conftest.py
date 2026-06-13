@@ -126,8 +126,12 @@ def client() -> TestClient:
         yield client
 
 
-@pytest.fixture
+import pytest_asyncio
+
+
+@pytest_asyncio.fixture
 async def session():
     """Provide an `AsyncSession` for tests."""
     async with AsyncSessionLocal() as s:
         yield s
+

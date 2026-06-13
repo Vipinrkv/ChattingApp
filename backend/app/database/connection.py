@@ -98,6 +98,8 @@ def _build_engine(database_url: str):
     connect_args = {
         "timeout": settings.DB_CONNECT_TIMEOUT_SECONDS,
     }
+    if "postgresql" in database_url:
+        connect_args["statement_cache_size"] = 0
     ssl_context = _build_ssl_context(database_url)
     if ssl_context is not None:
         connect_args["ssl"] = ssl_context

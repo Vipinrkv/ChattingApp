@@ -70,7 +70,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
         sa.Column("requester_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
         sa.Column("addressee_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("status", sa.Enum("pending", "accepted", "declined", name="friendrequeststatus"), nullable=False, server_default="pending"),
+        sa.Column("status", postgresql.ENUM("pending", "accepted", "declined", name="friendrequeststatus", create_type=False), nullable=False, server_default="pending"),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("responded_at", sa.DateTime(), nullable=True),
     )
@@ -118,7 +118,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("visibility", sa.Enum("public", "friends", "followers", "custom", name="postvisibility"), nullable=True, server_default="public"),
+        sa.Column("visibility", postgresql.ENUM("public", "friends", "followers", "custom", name="postvisibility", create_type=False), nullable=True, server_default="public"),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Index("ix_posts_user_created_at", "user_id", "created_at"),
@@ -196,6 +196,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False, index=True),
         sa.UniqueConstraint("post_id", "user_id", name="uq_post_reposts_pair"),
     )
+
+    # Ensure alembic_version can support revision IDs longer than 32 characters
+    op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64);")
+
 
 
 def downgrade() -> None:
