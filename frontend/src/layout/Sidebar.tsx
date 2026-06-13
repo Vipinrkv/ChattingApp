@@ -10,7 +10,6 @@ const navItems = [
   { label: 'Friends', path: '/friends', icon: '👤' },
   { label: 'Profile', path: '/profile', icon: '👤' },
   { label: 'Settings', path: '/settings', icon: '⚙️' },
-  { label: 'Admin', path: '/admin', icon: '🛡️' },
 ];
 
 function Sidebar() {

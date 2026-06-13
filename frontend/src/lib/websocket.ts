@@ -26,27 +26,38 @@ const managerRegistry = new Map<string, WebSocketManager>();
 
 function resolveSocketApiBase(): string {
   const envApiBase = import.meta.env.VITE_API_BASE;
-  if (typeof window === 'undefined') {
-    return envApiBase || 'http://localhost:8000';
+  const envApiUrl = import.meta.env.VITE_API_URL;
+
+  // Prioritize VITE_API_URL if it points to a remote server (e.g. Render backend)
+  if (envApiUrl && !envApiUrl.includes('localhost') && !envApiUrl.includes('127.0.0.1') && !envApiUrl.includes('::1')) {
+    return envApiUrl;
   }
 
-  const currentHost = window.location.hostname;
   if (envApiBase) {
-    try {
-      const parsed = new URL(envApiBase);
-      const isEnvLocalhost = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
-      const isPageNonLocalhost = !['localhost', '127.0.0.1', '::1'].includes(currentHost);
-      if (isEnvLocalhost && isPageNonLocalhost) {
-        const port = parsed.port || '8000';
-        return `${window.location.protocol}//${currentHost}:${port}`;
-      }
-    } catch {
-      // ignore invalid env URL and fall back to default
+    // If VITE_API_BASE is a remote server, use it
+    if (!envApiBase.includes('localhost') && !envApiBase.includes('127.0.0.1') && !envApiBase.includes('::1')) {
+      return envApiBase;
     }
-    return envApiBase;
+
+    // If it's a localhost URL, check if the app itself is running on localhost
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      const isPageLocalhost = ['localhost', '127.0.0.1', '::1'].includes(currentHost);
+      if (isPageLocalhost) {
+        return envApiBase;
+      }
+    }
   }
 
-  return `${window.location.protocol}//${currentHost}:8000`;
+  // Fallback to VITE_API_URL if VITE_API_BASE was a localhost proxy that we bypassed
+  if (envApiUrl) {
+    return envApiUrl;
+  }
+
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  return typeof window !== 'undefined'
+    ? `${window.location.protocol}//${currentHost}:8000`
+    : 'http://localhost:8000';
 }
 
 function getSocketKey(peerId: string, channelType: 'chat' | 'group') {

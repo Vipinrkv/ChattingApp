@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.friend import FriendRequest, FriendRequestStatus
 from app.models.user import User
+from app.models.block import Block
 from app.services.block_service import are_blocked, user_exists
 from app.services.notification_service import NotificationService
 from app.core.redis_cache import redis_cache
@@ -141,12 +142,27 @@ async def list_friends(session: AsyncSession, user_id: uuid.UUID) -> list[User]:
     if not friend_ids:
         return []
 
+    # Query blocks involving either the user blocker or the friend blocked, all in one batch query
+    blocks_result = await session.execute(
+        select(Block).where(
+            or_(
+                (Block.blocker_id == user_id) & (Block.blocked_user_id.in_(friend_ids)),
+                (Block.blocker_id.in_(friend_ids)) & (Block.blocked_user_id == user_id)
+            )
+        )
+    )
+    blocked_user_ids = set()
+    for block in blocks_result.scalars().all():
+        blocked_user_ids.add(block.blocked_user_id)
+        blocked_user_ids.add(block.blocker_id)
+
     users_result = await session.execute(select(User).where(User.id.in_(friend_ids)))
     friends = users_result.scalars().all()
+    
     return [
         friend
         for friend in friends
-        if not await are_blocked(session, user_id, friend.id)
+        if friend.id not in blocked_user_ids
     ]
 
 
