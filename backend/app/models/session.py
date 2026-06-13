@@ -39,7 +39,7 @@ class UserSession(Base):
     # Device information
     device_id = Column(String, nullable=False, index=True)  # Unique device fingerprint
     device_name = Column(String, nullable=True)  # User-friendly device name
-    device_type = Column(SQLEnum(DeviceType), default=DeviceType.WEB)
+    device_type = Column(SQLEnum(DeviceType, values_callable=lambda x: [item.value for item in x]), default=DeviceType.WEB)
     
     # Browser/OS info
     browser = Column(String, nullable=True)
@@ -58,7 +58,7 @@ class UserSession(Base):
     access_token_hash = Column(String, nullable=True)
     
     # Session management
-    status = Column(SQLEnum(SessionStatus), default=SessionStatus.ACTIVE)
+    status = Column(SQLEnum(SessionStatus, values_callable=lambda x: [item.value for item in x]), default=SessionStatus.ACTIVE)
     is_trusted = Column(Boolean, default=False)  # User marked as trusted
     mfa_verified = Column(Boolean, default=False)  # MFA passed for this session
     
@@ -85,7 +85,7 @@ class UserDevice(Base):
     user_id = Column(UUID(as_uuid=True), nullable=False)
     device_id = Column(String, nullable=False, unique=True)
     device_name = Column(String, nullable=True)
-    device_type = Column(SQLEnum(DeviceType), default=DeviceType.WEB)
+    device_type = Column(SQLEnum(DeviceType, values_callable=lambda x: [item.value for item in x]), default=DeviceType.WEB)
     
     # Device fingerprint data (encrypted)
     fingerprint = Column(String, nullable=True)

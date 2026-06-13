@@ -24,7 +24,7 @@ class Post(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
-    visibility = Column(SQLEnum(PostVisibility), default=PostVisibility.PUBLIC)
+    visibility = Column(SQLEnum(PostVisibility, values_callable=lambda x: [item.value for item in x]), default=PostVisibility.PUBLIC)
     quoted_post_id = Column(UUID(as_uuid=True), ForeignKey("posts.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(

@@ -29,7 +29,7 @@ class LoginHistory(Base):
     user_id = Column(UUID(as_uuid=True), nullable=True)
     
     # Login attempt info
-    status = Column(SQLEnum(LoginStatus), nullable=False)
+    status = Column(SQLEnum(LoginStatus, values_callable=lambda x: [item.value for item in x]), nullable=False)
     method = Column(String, nullable=False)  # 'email', 'phone', 'oauth', etc.
     identifier = Column(String, nullable=False)  # email or phone used
     

@@ -31,7 +31,7 @@ class FriendRequest(Base):
         index=True,
     )
     status = Column(
-        SQLEnum(FriendRequestStatus),
+        SQLEnum(FriendRequestStatus, values_callable=lambda x: [item.value for item in x]),
         default=FriendRequestStatus.PENDING,
         nullable=False,
     )

@@ -26,7 +26,7 @@ class MFASetup(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), nullable=False)
-    method = Column(SQLEnum(MFAMethod), nullable=False)
+    method = Column(SQLEnum(MFAMethod, values_callable=lambda x: [item.value for item in x]), nullable=False)
     secret = Column(String, nullable=True)  # Encrypted TOTP secret
     phone_number = Column(String, nullable=True)  # For SMS
     is_verified = Column(Boolean, default=False, index=True)
