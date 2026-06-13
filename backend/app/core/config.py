@@ -31,6 +31,7 @@ class Settings(BaseSettings):
         "FIREBASE_CREDENTIALS_PATH",
         os.path.join(os.path.dirname(__file__), "firebase_key.json"),
     )
+    FIREBASE_CREDENTIALS_JSON: str = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
 
     # Supabase Fallback
     SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
@@ -195,15 +196,28 @@ class Settings(BaseSettings):
         if self.DB_FAILOVER_URL and not self.DB_FAILOVER_URL.startswith("postgresql+asyncpg://"):
             errors.append("DB_FAILOVER_URL must use postgresql+asyncpg:// for async Postgres failover connections.")
 
-        if self.FIREBASE_CREDENTIALS_PATH and not os.path.isfile(self.FIREBASE_CREDENTIALS_PATH):
-            errors.append(f"Firebase credential file not found: {self.FIREBASE_CREDENTIALS_PATH}")
+        # Check Firebase credentials (can be either file path or direct JSON string)
+        firebase_ok = False
+        if self.FIREBASE_CREDENTIALS_JSON:
+            try:
+                json.loads(self.FIREBASE_CREDENTIALS_JSON)
+                firebase_ok = True
+            except Exception:
+                errors.append("FIREBASE_CREDENTIALS_JSON is not a valid JSON string.")
+
+        if not firebase_ok:
+            if self.FIREBASE_CREDENTIALS_PATH:
+                if not os.path.isfile(self.FIREBASE_CREDENTIALS_PATH):
+                    errors.append(f"Firebase credential file not found: {self.FIREBASE_CREDENTIALS_PATH}")
+                else:
+                    firebase_ok = True
 
         # Strict production security checks
         if self.is_production:
             if not self.FIREBASE_PROJECT_ID:
                 errors.append("FIREBASE_PROJECT_ID is required in production.")
-            if not self.FIREBASE_CREDENTIALS_PATH or not os.path.isfile(self.FIREBASE_CREDENTIALS_PATH):
-                errors.append("FIREBASE_CREDENTIALS_PATH must point to a valid file in production.")
+            if not firebase_ok:
+                errors.append("Either FIREBASE_CREDENTIALS_PATH pointing to a valid file or a valid FIREBASE_CREDENTIALS_JSON env variable must be set in production.")
             if not self.JWT_SECRET_KEY or len(self.JWT_SECRET_KEY) < 32:
                 errors.append("JWT_SECRET_KEY must be set to a strong random secret (min 32 chars) in production.")
             if not self.AES_KEY or len(self.AES_KEY) < 32:

@@ -68,8 +68,24 @@ class FirebaseService:
         cls._ensure_valid_ssl_bundle()
 
         try:
-            cred_path = cls._resolve_credentials_path()
             app_options = {"projectId": settings.FIREBASE_PROJECT_ID} if settings.FIREBASE_PROJECT_ID else None
+            
+            # Try loading credentials from the JSON string first
+            if settings.FIREBASE_CREDENTIALS_JSON:
+                logger.info("Initializing Firebase with credentials from FIREBASE_CREDENTIALS_JSON environment variable")
+                try:
+                    cred_dict = json.loads(settings.FIREBASE_CREDENTIALS_JSON)
+                    cred = credentials.Certificate(cred_dict)
+                    firebase_admin.initialize_app(cred, app_options)
+                    cls._initialized = True
+                    logger.info("Firebase initialized successfully from JSON env variable")
+                    return
+                except Exception as exc:
+                    logger.error(f"Failed to initialize Firebase from JSON env variable: {exc}")
+                    raise
+
+            # Fall back to path-based credentials
+            cred_path = cls._resolve_credentials_path()
             if cred_path:
                 logger.info(f"Using Firebase credentials from: {cred_path}")
                 cred = credentials.Certificate(cred_path)
