@@ -191,6 +191,7 @@ from app.models import (
     platform_expansion,
     enterprise_feature,
     globalization_feature,
+    encrypted_media,
 )  # noqa: F401
 
 
